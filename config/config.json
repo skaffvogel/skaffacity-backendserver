@@ -1,0 +1,53 @@
+{
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "apiPrefix": "/api/v1",
+    "corsOrigin": "*"
+  },
+  "database": {
+    "host": "207.180.235.41",
+    "port": 3306,
+    "name": "skaffacity",
+    "user": "skaffa",
+    "password": "change_me_please",
+    "pool": {
+      "min": 0,
+      "max": 10,
+      "idle": 10000
+    }
+  },
+  "auth": {
+    "jwtSecret": "change_this_to_a_secure_random_string",
+    "jwtExpiration": "24h",
+    "saltRounds": 10
+  },
+  "game": {
+    "maxPlayers": 50,
+    "serverName": "SkaffaCity Server",
+    "syncInterval": 1000,
+    "features": {
+      "playerSync": true,
+      "economy": true,
+      "inventory": true,
+      "factions": true,
+      "safeZones": true,
+      "cosmetics": true,
+      "crafting": true
+    }
+  },
+  "logging": {
+    "level": "info",
+    "file": "../logs/server.log"
+  },
+  "security": {
+    "rateLimiting": {
+      "windowMs": 900000,
+      "max": 100
+    },
+    "helmet": {
+      "contentSecurityPolicy": false,
+      "crossOriginEmbedderPolicy": false
+    }
+  }
+}
