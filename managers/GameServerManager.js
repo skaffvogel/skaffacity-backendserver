@@ -658,11 +658,27 @@ class GameServerManager {
             // Allocation doesn't exist, create it
             console.log(`[GameServerManager] 🔨 Creating new allocation for port ${port}...`);
             
+            // Get IP and alias from existing allocations to match the pattern
+            let nodeIP = '0.0.0.0';
+            let nodeAlias = null;
+            
+            if (allocationsResponse.data && allocationsResponse.data.data && allocationsResponse.data.data.length > 0) {
+                const firstAllocation = allocationsResponse.data.data[0].attributes;
+                nodeIP = firstAllocation.ip;
+                nodeAlias = firstAllocation.ip_alias;
+                console.log(`[GameServerManager] 📡 Using existing node IP: ${nodeIP}${nodeAlias ? ` (alias: ${nodeAlias})` : ''}`);
+            }
+            
             const createAllocationRequest = {
-                ip: '0.0.0.0', // Default IP, adjust if needed
+                ip: nodeIP,
                 ports: [port.toString()], // Pterodactyl expects an array of port strings
                 assigned: false
             };
+            
+            // Add alias if it exists on other allocations
+            if (nodeAlias) {
+                createAllocationRequest.ip_alias = nodeAlias;
+            }
             
             const createResponse = await axios.post(
                 `${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`,
@@ -675,13 +691,31 @@ class GameServerManager {
                 }
             );
             
-            if (createResponse.status === 201) {
+            if (createResponse.status === 201 || createResponse.status === 200) {
                 console.log(`[GameServerManager] ✅ Created new allocation for port ${port}`);
-                return {
-                    id: createResponse.data.attributes.id,
-                    port: createResponse.data.attributes.port,
-                    ip: createResponse.data.attributes.ip
-                };
+                console.log('[GameServerManager] 📋 Allocation response:', JSON.stringify(createResponse.data, null, 2));
+                
+                // Handle different response structures
+                const allocationData = createResponse.data;
+                if (allocationData.data && Array.isArray(allocationData.data)) {
+                    // Multiple allocations created, get the first one
+                    const allocation = allocationData.data[0];
+                    return {
+                        id: allocation.attributes.id,
+                        port: allocation.attributes.port,
+                        ip: allocation.attributes.ip
+                    };
+                } else if (allocationData.attributes) {
+                    // Single allocation response
+                    return {
+                        id: allocationData.attributes.id,
+                        port: allocationData.attributes.port,
+                        ip: allocationData.attributes.ip
+                    };
+                } else {
+                    console.error('[GameServerManager] ❌ Unexpected allocation response structure');
+                    throw new Error('Unexpected allocation response structure');
+                }
             }
             
         } catch (error) {
