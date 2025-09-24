@@ -81,6 +81,41 @@ class ConfigManager extends EventEmitter {
         if (serverConfig) {
             console.log(`[ConfigManager] Server will bind to: ${serverConfig.host}:${serverConfig.port}`);
         }
+        
+        // Validate password fields
+        this.validatePasswordFields();
+    }
+
+    validatePasswordFields() {
+        const warnings = [];
+        
+        // Check database password
+        const dbConfig = this.configs.get('database');
+        if (dbConfig && (!dbConfig.password || dbConfig.password === '')) {
+            warnings.push('Database password is empty');
+        }
+        
+        // Check JWT secret
+        const serverConfig = this.configs.get('server');
+        if (serverConfig && (!serverConfig.jwtSecret || serverConfig.jwtSecret === '')) {
+            warnings.push('JWT secret is empty');
+        }
+        
+        // Check Pterodactyl API keys
+        const gameserverConfig = this.configs.get('gameserver');
+        if (gameserverConfig?.pterodactyl?.enabled) {
+            if (!gameserverConfig.pterodactyl.apiKey || gameserverConfig.pterodactyl.apiKey === '') {
+                warnings.push('Pterodactyl API key is empty');
+            }
+        }
+        
+        if (warnings.length > 0) {
+            console.log('[ConfigManager] 🔐 Security warnings:');
+            warnings.forEach(warning => {
+                console.log(`[ConfigManager] ⚠️  ${warning}`);
+            });
+            console.log('[ConfigManager] 💡 Use commands to set passwords: config set database.password <password>');
+        }
     }
 
     createDefaultConfig(configType, configPath) {
@@ -93,7 +128,9 @@ class ConfigManager extends EventEmitter {
                     httpsPort: 8443,
                     host: '0.0.0.0',
                     apiPrefix: '/api/v1',
-                    enableHTTPS: false
+                    enableHTTPS: false,
+                    jwtSecret: '',  // Leeg JWT secret - moet handmatig ingevuld worden
+                    adminPassword: ''  // Leeg admin password voor server management
                 };
                 break;
             case 'database':
@@ -101,13 +138,16 @@ class ConfigManager extends EventEmitter {
                     host: '207.180.235.41',
                     port: 3306,
                     database: 's14_skaffacity',
-                    username: 'u14_Sz62GJBI8E'
+                    username: 'u14_Sz62GJBI8E',
+                    password: ''  // Leeg password field - moet handmatig ingevuld worden
                 };
                 break;
             case 'ssl':
                 defaultConfig = {
                     keyPath: '../ssl/private-key.pem',
-                    certPath: '../ssl/certificate.pem'
+                    certPath: '../ssl/certificate.pem',
+                    keyPassword: '',  // Leeg password voor private key (indien geencrypteerd)
+                    caPath: ''  // Certificate Authority path (optioneel)
                 };
                 break;
             case 'gameserver':
@@ -115,8 +155,10 @@ class ConfigManager extends EventEmitter {
                     pterodactyl: {
                         enabled: false,
                         apiUrl: '',
-                        apiKey: '',
-                        serverId: ''
+                        apiKey: '',  // Leeg API key - moet handmatig ingevuld worden
+                        serverId: '',
+                        adminApiKey: '',  // Leeg admin API key voor server management
+                        clientApiKey: ''  // Leeg client API key voor beperkte acties
                     },
                     maxServers: 5,
                     autoScale: true,
@@ -186,12 +228,37 @@ class ConfigManager extends EventEmitter {
         }
     }
 
-    // Get specific config
+    // Get specific config with environment variable overrides
     getConfig(configType) {
         if (!configType) {
             return this.getAllConfigs();
         }
-        return this.configs.get(configType);
+        
+        let config = { ...this.configs.get(configType) };
+        
+        // Apply environment variable overrides for sensitive data
+        if (configType === 'database') {
+            if (process.env.DB_PASSWORD) config.password = process.env.DB_PASSWORD;
+            if (process.env.DB_HOST) config.host = process.env.DB_HOST;
+            if (process.env.DB_PORT) config.port = parseInt(process.env.DB_PORT);
+            if (process.env.DB_NAME) config.database = process.env.DB_NAME;
+            if (process.env.DB_USER) config.username = process.env.DB_USER;
+        } else if (configType === 'server') {
+            if (process.env.JWT_SECRET) config.jwtSecret = process.env.JWT_SECRET;
+            if (process.env.ADMIN_PASSWORD) config.adminPassword = process.env.ADMIN_PASSWORD;
+            if (process.env.SERVER_PORT) config.port = parseInt(process.env.SERVER_PORT);
+        } else if (configType === 'gameserver') {
+            if (process.env.PTERODACTYL_API_KEY) {
+                config.pterodactyl = config.pterodactyl || {};
+                config.pterodactyl.apiKey = process.env.PTERODACTYL_API_KEY;
+            }
+            if (process.env.PTERODACTYL_URL) {
+                config.pterodactyl = config.pterodactyl || {};
+                config.pterodactyl.apiUrl = process.env.PTERODACTYL_URL;
+            }
+        }
+        
+        return config;
     }
 
     // Get all configs as combined object (for backward compatibility)

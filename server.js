@@ -8,6 +8,15 @@ console.log('║                    Opstarten...                       ║');
 console.log('╚════════════════════════════════════════════════════════╝');
 
 console.log('[MODULE] Core modules laden...');
+
+// Load environment variables first
+try {
+    require('dotenv').config();
+    console.log('[MODULE] ✅ Environment variables loaded');
+} catch (error) {
+    console.log('[MODULE] ⚠️  dotenv not available, skipping .env file');
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -69,7 +78,9 @@ try {
         apiPrefix: '/api/v1',
         enableHTTPS: false,
         sslKeyPath: path.join(__dirname, '../ssl/private-key.pem'),
-        sslCertPath: path.join(__dirname, '../ssl/certificate.pem')
+        sslCertPath: path.join(__dirname, '../ssl/certificate.pem'),
+        jwtSecret: '',
+        adminPassword: ''
     };
     
     config = {
@@ -78,15 +89,26 @@ try {
             host: '207.180.235.41',
             port: 3306,
             database: 's14_skaffacity',
-            username: 'u14_Sz62GJBI8E'
+            username: 'u14_Sz62GJBI8E',
+            password: ''
         },
         ssl: {
             keyPath: '../ssl/private-key.pem',
-            certPath: '../ssl/certificate.pem'
+            certPath: '../ssl/certificate.pem',
+            keyPassword: '',
+            caPath: ''
         },
         gameserver: {
             maxServers: 5,
-            autoScale: true
+            autoScale: true,
+            pterodactyl: {
+                enabled: false,
+                apiUrl: '',
+                apiKey: '',
+                serverId: '',
+                adminApiKey: '',
+                clientApiKey: ''
+            }
         }
     };
     
