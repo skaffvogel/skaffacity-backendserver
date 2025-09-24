@@ -34,6 +34,9 @@ class GameServerCommand {
             case 'pterodactyl':
                 await this.pterodactylStatus();
                 break;
+            case 'create':
+                await this.createServer();
+                break;
             case 'scale':
                 await this.scaleServers(args[1]);
                 break;
@@ -239,12 +242,12 @@ class GameServerCommand {
             
             const status = await manager.checkPterodactylConnection();
             
-            if (status.success) {
+            if (status.status === 'connected') {
                 console.log('[GAMESERVER] ✅ Pterodactyl connection successful');
-                console.log(`[GAMESERVER] 📊 Panel version: ${status.version || 'Unknown'}`);
+                console.log(`[GAMESERVER] 📊 Status: ${status.message}`);
             } else {
                 console.log('[GAMESERVER] ❌ Pterodactyl connection failed');
-                console.log(`[GAMESERVER] Error: ${status.error}`);
+                console.log(`[GAMESERVER] Error: ${status.message}`);
             }
             
         } catch (error) {
@@ -280,6 +283,33 @@ class GameServerCommand {
         }
     }
 
+    async createServer() {
+        console.log('[GAMESERVER] 🏗️ Creating new game server...');
+        
+        try {
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
+            
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
+                const GameServerManager = require('../managers/GameServerManager');
+                const manager = new GameServerManager();
+                
+                const newServer = await manager.createServer();
+                console.log(`[GAMESERVER] ✅ New server created successfully`);
+                console.log(`[GAMESERVER] 🆔 Server ID: ${newServer.id || newServer.uuid || 'Unknown'}`);
+                
+                if (newServer.name) {
+                    console.log(`[GAMESERVER] 📛 Server Name: ${newServer.name}`);
+                }
+            } else {
+                console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
+                console.log('[GAMESERVER] 💡 Enable in config: config updateConfig gameserver pterodactyl.enabled true');
+            }
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to create server:', error.message);
+        }
+    }
+
     getStatusEmoji(status) {
         switch (status.toLowerCase()) {
             case 'running': return '🟢';
@@ -291,11 +321,39 @@ class GameServerCommand {
         }
     }
 
+    async createServer() {
+        console.log('[GAMESERVER] 🏗️ Creating new game server...');
+        
+        try {
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
+            
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
+                const GameServerManager = require('../managers/GameServerManager');
+                const manager = new GameServerManager();
+                
+                const newServer = await manager.createServer();
+                console.log(`[GAMESERVER] ✅ New server created successfully`);
+                console.log(`[GAMESERVER] 🆔 Server ID: ${newServer.id || newServer.uuid || 'Unknown'}`);
+                
+                if (newServer.name) {
+                    console.log(`[GAMESERVER] 📛 Server Name: ${newServer.name}`);
+                }
+            } else {
+                console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
+                console.log('[GAMESERVER] 💡 Enable in config: config updateConfig gameserver pterodactyl.enabled true');
+            }
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to create server:', error.message);
+        }
+    }
+
     showHelp() {
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                Game Server Command Help                  ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
         console.log('║  gameserver list          - List all game servers       ║');
+        console.log('║  gameserver create        - Create new game server      ║');
         console.log('║  gameserver start [id]    - Start server (or create new)║');
         console.log('║  gameserver stop <id>     - Stop specific server        ║');
         console.log('║  gameserver status        - Show server status overview ║');
