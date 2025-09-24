@@ -9,7 +9,7 @@ const path = require('path');
 // Laad de configuratie (met fallback)
 let config, dbConfig;
 try {
-    config = require('./config/config.json');
+    config = require('../config/config.json');
     dbConfig = config.database;
 } catch (error) {
     console.warn('Config file not found, using environment variables');

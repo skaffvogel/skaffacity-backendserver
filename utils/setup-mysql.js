@@ -9,7 +9,7 @@ const mysql = require('mysql2/promise');
 const prompts = require('prompts');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config/config.json');
+const config = require('../config/config.json');
 
 // Instellingen voor de database
 const DB_NAME = config.database.name || 'skaffacity';

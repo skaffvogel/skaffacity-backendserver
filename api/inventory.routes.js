@@ -7,8 +7,8 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // Database verbinding
-const db = require('./utils/db');
-const { Player } = require('./utils/database');
+const db = require('../utils/db');
+const { Player } = require('../utils/database');
 
 // Middleware
 const { authenticateToken: authMiddleware } = require('../middleware/auth');

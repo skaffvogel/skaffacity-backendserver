@@ -4,7 +4,7 @@
 
 const User = require('../models/user.mysql');
 const Transaction = require('../models/transaction.mysql');
-const db = require('./utils/db');
+const db = require('../utils/db');
 
 /**
  * Krijg SKAFF balans van gebruiker

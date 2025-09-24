@@ -2,7 +2,7 @@
  * Error handler middleware voor uniforme error responses
  */
 
-const { logger } = require('./utils/logger');
+const { logger } = require('../utils/logger');
 
 // Custom error class voor app-specifieke errors
 class AppError extends Error {
