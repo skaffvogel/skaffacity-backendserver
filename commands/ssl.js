@@ -11,7 +11,6 @@ class SSLCommand {
     constructor() {
         this.description = 'Manage SSL certificates and HTTPS settings';
         this.usage = 'ssl <generate|toggle|status>';
-        this.configPath = path.join(__dirname, '../config.json');
         this.sslDir = path.join(__dirname, '../ssl');
     }
 
@@ -74,22 +73,30 @@ class SSLCommand {
     }
 
     async toggleHTTPS() {
-        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
-        const currentStatus = config.server.enableHTTPS;
-        
-        const newStatus = !currentStatus;
-        if (global.configManager) {
-            global.configManager.set('server.enableHTTPS', newStatus);
-        } else {
-            config.server.enableHTTPS = newStatus;
-            this.saveConfig(config);
+        if (!global.configManager) {
+            console.log('[SSL] ❌ ConfigManager not available');
+            return;
         }
         
-        const status = config.server.enableHTTPS ? 'enabled' : 'disabled';
-        const emoji = config.server.enableHTTPS ? '🔐' : '🔓';
+        const serverConfig = global.configManager.getConfig('server');
+        if (!serverConfig) {
+            console.log('[SSL] ❌ Server configuration not found');
+            return;
+        }
         
-        console.log(`[SSL] ${emoji} HTTPS ${status}`);
-        console.log('[SSL] 🔄 Restart server to apply changes');
+        const currentStatus = serverConfig.enableHTTPS;
+        const newStatus = !currentStatus;
+        
+        const success = global.configManager.updateConfig('server', 'enableHTTPS', newStatus);
+        if (success) {
+            const status = newStatus ? 'enabled' : 'disabled';
+            const emoji = newStatus ? '🔐' : '🔓';
+            
+            console.log(`[SSL] ${emoji} HTTPS ${status}`);
+            console.log('[SSL] 🔄 Changes applied immediately with live reload');
+        } else {
+            console.log('[SSL] ❌ Failed to toggle HTTPS');
+        }
         
         this.showStatus();
     }
@@ -129,18 +136,32 @@ class SSLCommand {
         console.log('║                      SSL Status                          ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
         
-        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
-        const httpsEnabled = config.server.enableHTTPS;
+        if (!global.configManager) {
+            console.log('║  ❌ ConfigManager not available                        ║');
+            console.log('╚══════════════════════════════════════════════════════════╝');
+            return;
+        }
+        
+        const sslConfig = global.configManager.getConfig('ssl');
+        const serverConfig = global.configManager.getConfig('server');
+        
+        if (!sslConfig || !serverConfig) {
+            console.log('║  ❌ SSL or Server configuration not found             ║');
+            console.log('╚══════════════════════════════════════════════════════════╝');
+            return;
+        }
+        
+        const httpsEnabled = serverConfig.enableHTTPS;
         const httpsEmoji = httpsEnabled ? '🔐' : '🔓';
         const httpsStatus = httpsEnabled ? 'ENABLED' : 'DISABLED';
         
         console.log(`║  HTTPS Status: ${httpsEmoji} ${httpsStatus.padEnd(36)} ║`);
-        console.log(`║  HTTP Port:    ${config.server.port.toString().padEnd(40)} ║`);
-        console.log(`║  HTTPS Port:   ${config.server.httpsPort.toString().padEnd(40)} ║`);
+        console.log(`║  HTTP Port:    ${serverConfig.port.toString().padEnd(40)} ║`);
+        console.log(`║  HTTPS Port:   ${serverConfig.httpsPort.toString().padEnd(40)} ║`);
         
-        // Check certificate files
-        const keyPath = path.join(this.sslDir, 'private-key.pem');
-        const certPath = path.join(this.sslDir, 'certificate.pem');
+        // Check certificate files using SSL config paths
+        const keyPath = path.resolve(__dirname, '..', sslConfig.keyPath);
+        const certPath = path.resolve(__dirname, '..', sslConfig.certPath);
         
         const keyExists = fs.existsSync(keyPath);
         const certExists = fs.existsSync(certPath);

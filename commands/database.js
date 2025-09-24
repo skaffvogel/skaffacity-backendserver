@@ -49,8 +49,18 @@ class DatabaseCommand {
         console.log('╠══════════════════════════════════════════════════════════╣');
         
         try {
-            const config = this.loadConfig();
-            const dbConfig = config.database;
+            if (!global.configManager) {
+                console.log('║  ❌ ConfigManager not available                        ║');
+                console.log('╚══════════════════════════════════════════════════════════╝');
+                return;
+            }
+            
+            const dbConfig = global.configManager.getConfig('database');
+            if (!dbConfig) {
+                console.log('║  ❌ Database configuration not found                  ║');
+                console.log('╚══════════════════════════════════════════════════════════╝');
+                return;
+            }
             
             console.log(`║  Host:        ${dbConfig.host.padEnd(40)} ║`);
             console.log(`║  Port:        ${dbConfig.port.toString().padEnd(40)} ║`);

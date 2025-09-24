@@ -180,22 +180,33 @@ class GameServerCommand {
     }
 
     async showConfig() {
-        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
+        if (!global.configManager) {
+            console.log('[GAMESERVER] ❌ ConfigManager not available');
+            return;
+        }
+        
+        const gameserverConfig = global.configManager.getConfig('gameserver');
+        if (!gameserverConfig) {
+            console.log('[GAMESERVER] ❌ GameServer configuration not found');
+            return;
+        }
         
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║               Game Server Configuration                  ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
-        console.log(`║  Max Servers:     ${config.gameServer.maxServers.toString().padEnd(36)} ║`);
-        console.log(`║  Auto Scale:      ${config.gameServer.autoScale.toString().padEnd(36)} ║`);
+        console.log(`║  Max Servers:     ${gameserverConfig.maxServers.toString().padEnd(36)} ║`);
+        console.log(`║  Auto Scale:      ${gameserverConfig.autoScale.toString().padEnd(36)} ║`);
         console.log('║                                                          ║');
         console.log('║  Pterodactyl Integration:                                ║');
-        console.log(`║    Enabled:       ${config.gameServer.pterodactyl.enabled.toString().padEnd(36)} ║`);
+        console.log(`║    Enabled:       ${gameserverConfig.pterodactyl.enabled.toString().padEnd(36)} ║`);
         
-        const apiUrl = config.gameServer.pterodactyl.apiUrl || 'Not configured';
-        const apiKey = config.gameServer.pterodactyl.apiKey ? 'Configured' : 'Not configured';
+        const apiUrl = gameserverConfig.pterodactyl.apiUrl || 'Not configured';
+        const apiKey = gameserverConfig.pterodactyl.apiKey ? 'Configured' : 'Not configured';
+        const adminKey = gameserverConfig.pterodactyl.adminApiKey ? 'Configured' : 'Not configured';
         
         console.log(`║    API URL:       ${apiUrl.substring(0, 36).padEnd(36)} ║`);
         console.log(`║    API Key:       ${apiKey.padEnd(36)} ║`);
+        console.log(`║    Admin Key:     ${adminKey.padEnd(36)} ║`);
         
         console.log('╚══════════════════════════════════════════════════════════╝\n');
     }
@@ -204,9 +215,18 @@ class GameServerCommand {
         console.log('[GAMESERVER] 🦕 Checking Pterodactyl connection...');
         
         try {
-            const config = this.loadConfig();
+            if (!global.configManager) {
+                console.log('[GAMESERVER] ❌ ConfigManager not available');
+                return;
+            }
             
-            if (!config.gameServer.pterodactyl.enabled) {
+            const gameserverConfig = global.configManager.getConfig('gameserver');
+            if (!gameserverConfig) {
+                console.log('[GAMESERVER] ❌ GameServer configuration not found');
+                return;
+            }
+            
+            if (!gameserverConfig.pterodactyl.enabled) {
                 console.log('[GAMESERVER] ❌ Pterodactyl integration is disabled');
                 return;
             }
