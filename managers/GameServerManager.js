@@ -224,7 +224,7 @@ class GameServerManager {
                 },
                 environment: {
                     // SkaffaCity Unity Server Egg Variables
-                    SERVER_JARFILE: serverTemplate.environment?.SERVER_JARFILE || 'SkaffaCityServer.x86_64',
+                    SERVER_JARFILE: serverTemplate.environment?.SERVER_JARFILE || 'auto-detect',
                     MASTER_SERVER_URL: serverTemplate.environment?.MASTER_SERVER_URL || process.env.MASTER_SERVER_URL || 'http://207.180.235.41:3000',
                     SERVER_NAME: serverTemplate.environment?.SERVER_NAME || `SkaffaCity Server #${allocation.port}`,
                     MAX_PLAYERS: serverTemplate.environment?.MAX_PLAYERS || this.serverConfig.maxPlayersPerServer.toString(),
@@ -232,11 +232,13 @@ class GameServerManager {
                     REGION: serverTemplate.environment?.REGION || 'EU-West',
                     GAME_MODE: serverTemplate.environment?.GAME_MODE || 'standard',
                     
-                    // GitHub Integration for Auto Updates
+                    // GitHub Integration for Auto Updates (Primary Method)
                     GITHUB_REPO: serverTemplate.environment?.GITHUB_REPO || 'skaffvogel/skaffacity-serverbuild',
                     GITHUB_BRANCH: serverTemplate.environment?.GITHUB_BRANCH || 'master',
-                    DOWNLOAD_URL: serverTemplate.environment?.DOWNLOAD_URL || 'https://github.com/skaffvogel/skaffacity-serverbuild/archive/refs/heads/master.zip',
                     AUTO_UPDATE: serverTemplate.environment?.AUTO_UPDATE || '1',
+                    
+                    // Fallback download URL (only used if GitHub fails or is disabled)
+                    DOWNLOAD_URL: serverTemplate.environment?.DOWNLOAD_URL || '',
                     
                     // Server Management
                     AUTO_RESTART: serverTemplate.environment?.AUTO_RESTART || '1',
