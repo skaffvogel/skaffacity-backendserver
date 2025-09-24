@@ -246,7 +246,7 @@ const initModelTables = async () => {
     console.log('Model tabellen initialiseren...');
     
     // Importeer de modellen dynamisch
-    const Transaction = require('./models/transaction.mysql');
+    const Transaction = require('../models/transaction.mysql');
     
     // Initialiseer de tabellen
     if (Transaction.initTable && typeof Transaction.initTable === 'function') {

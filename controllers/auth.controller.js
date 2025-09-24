@@ -2,7 +2,7 @@
  * Auth controller voor authenticatie en gebruikersbeheer
  */
 
-const User = require('./models/user.mysql');
+const User = require('../models/user.mysql');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 

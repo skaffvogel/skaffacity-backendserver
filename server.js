@@ -25,8 +25,15 @@ try {
         }
     };
 }
+
 const db = require('./utils/db');
-const models = require('./utils/database');
+let models;
+try {
+    models = require('./utils/database');
+} catch (error) {
+    console.warn('Database models not found, continuing without models');
+    models = {};
+}
 
 // Routes importeren
 const authRoutes = require('./api/auth.routes');
