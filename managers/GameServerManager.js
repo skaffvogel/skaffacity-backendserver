@@ -166,37 +166,40 @@ class GameServerManager {
         const serverPort = this.serverConfig.serverStartPort + this.servers.size;
 
         try {
-            // Pterodactyl server creation request
+            // Get configuration from modular config
+            const gameserverConfig = global.configManager ? global.configManager.getConfig('gameserver') : null;
+            const serverTemplate = gameserverConfig?.serverTemplate || {};
+            
+            // Pterodactyl server creation request with proper structure
             const createRequest = {
                 name: serverName,
-                description: 'SkaffaCity UDP Game Server Instance',
-                user: 1, // Admin user ID
-                egg: this.pterodactylConfig.gameServerEggId,
-                nest: this.pterodactylConfig.gameServerNestId,
-                docker_image: 'node:18-alpine',
-                startup: 'node gameserver.js',
-                limits: {
-                    memory: 1024,
+                description: serverTemplate.description || 'SkaffaCity UDP Game Server Instance',
+                user: 1, // Admin user ID - you may need to change this
+                egg: parseInt(serverTemplate.egg) || parseInt(this.pterodactylConfig.gameServerEggId) || 5,
+                docker_image: serverTemplate.docker_image || 'ghcr.io/pterodactyl/yolks:nodejs_18',
+                startup: serverTemplate.startup || 'node gameserver.js',
+                limits: serverTemplate.limits || {
+                    memory: 512,
                     swap: 0,
                     disk: 1024,
                     io: 500,
                     cpu: 100
                 },
-                feature_limits: {
+                feature_limits: serverTemplate.feature_limits || {
                     databases: 0,
                     allocations: 1,
                     backups: 0
                 },
-                allocation: {
-                    default: serverPort
-                },
                 environment: {
+                    ...(serverTemplate.environment || {}),
                     GAME_SERVER_ID: serverId,
-                    GAME_SERVER_PORT: serverPort,
+                    GAME_SERVER_PORT: serverPort.toString(),
                     MASTER_SERVER_URL: process.env.MASTER_SERVER_URL || 'https://localhost:8443',
-                    MAX_PLAYERS: this.serverConfig.maxPlayersPerServer
+                    MAX_PLAYERS: this.serverConfig.maxPlayersPerServer.toString()
                 }
             };
+            
+            console.log('[GameServerManager] 📋 Creating server with config:', JSON.stringify(createRequest, null, 2));
 
             const response = await axios.post(
                 `${this.pterodactylConfig.apiUrl}/application/servers`,
@@ -232,6 +235,20 @@ class GameServerManager {
             }
         } catch (error) {
             console.error('[GameServerManager] ❌ Fout bij aanmaken server:', error.message);
+            
+            // Log more detailed error information
+            if (error.response) {
+                console.error('[GameServerManager] 📊 API Response Status:', error.response.status);
+                console.error('[GameServerManager] 📋 API Response Data:', JSON.stringify(error.response.data, null, 2));
+                
+                if (error.response.data && error.response.data.errors) {
+                    console.error('[GameServerManager] 🔍 Validation Errors:');
+                    for (const field in error.response.data.errors) {
+                        console.error(`  - ${field}: ${error.response.data.errors[field].join(', ')}`);
+                    }
+                }
+            }
+            
             throw error;
         }
     }
