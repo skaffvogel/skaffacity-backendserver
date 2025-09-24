@@ -1,37 +1,94 @@
 /**
- * Configuration API Routes
- * Endpoints voor live configuratie management
+ * Modular Configuration API Routes
+ * Endpoints voor modulaire configuratie management
  */
 
 const express = require('express');
 const router = express.Router();
 
-// GET /api/v1/config/current - Huidige configuratie
-router.get('/current', (req, res) => {
+// GET /api/v1/config/all - Alle configuraties
+router.get('/all', (req, res) => {
     try {
-        const config = global.configManager ? global.configManager.getConfig() : null;
-        const serverConfig = global.getCurrentServerConfig ? global.getCurrentServerConfig() : null;
-        
-        if (!config || !serverConfig) {
-            return res.status(500).json({
+        if (!global.configManager) {
+            return res.status(503).json({
                 success: false,
-                message: 'Configuration not available'
+                message: 'ConfigManager not available'
             });
         }
 
+        const allConfigs = global.configManager.getAllConfigs();
+        
         res.json({
             success: true,
-            config: {
-                server: {
-                    port: serverConfig.port,
-                    httpsPort: serverConfig.httpsPort,
-                    host: serverConfig.host,
-                    apiPrefix: serverConfig.apiPrefix,
-                    enableHTTPS: serverConfig.enableHTTPS
-                },
-                database: config.database,
-                gameServer: config.gameServer
+            configs: allConfigs,
+            type: 'modular',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get configurations',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/v1/config/status - Status van configuratie systeem
+router.get('/status', (req, res) => {
+    try {
+        const currentServerConfig = global.getCurrentServerConfig ? global.getCurrentServerConfig() : null;
+        const allConfigs = global.configManager ? global.configManager.getAllConfigs() : null;
+        
+        res.json({
+            success: true,
+            system: {
+                type: 'modular',
+                configManager: !!global.configManager,
+                liveReload: true,
+                configFiles: ['server.json', 'database.json', 'ssl.json', 'gameserver.json']
             },
+            server: {
+                host: currentServerConfig?.host,
+                port: currentServerConfig?.port,
+                httpsPort: currentServerConfig?.httpsPort,
+                enableHTTPS: currentServerConfig?.enableHTTPS
+            },
+            configs: allConfigs,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// GET /api/v1/config/:type - Specifieke configuratie ophalen
+router.get('/:type', (req, res) => {
+    try {
+        const configType = req.params.type;
+        
+        if (!global.configManager) {
+            return res.status(503).json({
+                success: false,
+                message: 'ConfigManager not available'
+            });
+        }
+        
+        const config = global.configManager.getConfig(configType);
+        if (!config) {
+            return res.status(404).json({
+                success: false,
+                message: `Config type '${configType}' not found`,
+                availableTypes: ['server', 'database', 'ssl', 'gameserver']
+            });
+        }
+        
+        res.json({
+            success: true,
+            type: configType,
+            config: config,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -43,126 +100,86 @@ router.get('/current', (req, res) => {
     }
 });
 
-// POST /api/v1/config/reload - Herlaad configuratie
-router.post('/reload', (req, res) => {
+// POST /api/v1/config/:type - Configuratie updaten
+router.post('/:type', (req, res) => {
     try {
-        if (!global.configManager) {
-            return res.status(500).json({
-                success: false,
-                message: 'Configuration manager not available'
-            });
-        }
-
-        const success = global.configManager.reloadConfig();
-        
-        if (success) {
-            const serverConfig = global.configManager.getServerConfig();
-            res.json({
-                success: true,
-                message: 'Configuration reloaded successfully',
-                config: {
-                    port: serverConfig.port,
-                    httpsPort: serverConfig.httpsPort,
-                    host: serverConfig.host,
-                    enableHTTPS: serverConfig.enableHTTPS
-                },
-                timestamp: new Date().toISOString()
-            });
-        } else {
-            res.status(500).json({
-                success: false,
-                message: 'Failed to reload configuration'
-            });
-        }
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error reloading configuration',
-            error: error.message
-        });
-    }
-});
-
-// PUT /api/v1/config/setting - Update specifieke setting
-router.put('/setting', (req, res) => {
-    try {
+        const configType = req.params.type;
         const { key, value } = req.body;
+        
+        if (!global.configManager) {
+            return res.status(503).json({
+                success: false,
+                message: 'ConfigManager not available'
+            });
+        }
         
         if (!key || value === undefined) {
             return res.status(400).json({
                 success: false,
-                message: 'Key and value are required'
+                message: 'Key and value are required',
+                example: {
+                    key: 'port',
+                    value: 8080
+                }
             });
         }
-
-        if (!global.configManager) {
-            return res.status(500).json({
-                success: false,
-                message: 'Configuration manager not available'
-            });
-        }
-
-        const success = global.configManager.set(key, value);
         
+        // Convert string values to appropriate types
+        let parsedValue = value;
+        if (value === 'true') parsedValue = true;
+        else if (value === 'false') parsedValue = false;
+        else if (!isNaN(value) && !isNaN(parseFloat(value))) parsedValue = parseFloat(value);
+        
+        const success = global.configManager.updateConfig(configType, key, parsedValue);
         if (success) {
+            const updatedConfig = global.configManager.getConfig(configType);
             res.json({
                 success: true,
-                message: `Setting ${key} updated successfully`,
-                key: key,
-                value: value,
+                message: `Updated ${configType}.${key}`,
+                change: {
+                    type: configType,
+                    key: key,
+                    value: parsedValue
+                },
+                config: updatedConfig,
                 timestamp: new Date().toISOString()
             });
         } else {
             res.status(500).json({
                 success: false,
-                message: `Failed to update setting ${key}`
+                message: 'Failed to update configuration'
             });
         }
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error updating configuration',
+            message: 'Failed to update configuration',
             error: error.message
         });
     }
 });
 
-// GET /api/v1/config/status - Configuratie status
-router.get('/status', (req, res) => {
+// POST /api/v1/config/reload - Alle configuraties herladen
+router.post('/reload', (req, res) => {
     try {
-        const hasConfigManager = !!global.configManager;
-        const hasGetCurrentConfig = !!global.getCurrentServerConfig;
-        
-        let configValid = false;
-        let serverConfigValid = false;
-        
-        if (hasConfigManager) {
-            try {
-                const config = global.configManager.getConfig();
-                const serverConfig = global.configManager.getServerConfig();
-                configValid = !!config;
-                serverConfigValid = !!serverConfig;
-            } catch (error) {
-                // Configs are invalid
-            }
+        if (!global.configManager) {
+            return res.status(503).json({
+                success: false,
+                message: 'ConfigManager not available'
+            });
         }
-
+        
+        global.configManager.reloadAllConfigs();
+        
         res.json({
             success: true,
-            status: {
-                configManagerAvailable: hasConfigManager,
-                getCurrentConfigAvailable: hasGetCurrentConfig,
-                configValid: configValid,
-                serverConfigValid: serverConfigValid,
-                liveReloadSupported: hasConfigManager && configValid,
-                fileWatcherActive: hasConfigManager
-            },
+            message: 'All configurations reloaded from files',
             timestamp: new Date().toISOString()
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error checking configuration status',
+            message: 'Failed to reload configurations',
             error: error.message
         });
     }

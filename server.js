@@ -105,21 +105,46 @@ function getCurrentServerConfig() {
 // Maak functie globaal beschikbaar
 global.getCurrentServerConfig = getCurrentServerConfig;
 
+// Globale getConfigByType functie voor nieuwe config system
+function getConfigByType(type) {
+    if (global.configManager && global.configManager.getConfig) {
+        return global.configManager.getConfig(type);
+    }
+    return null;
+}
+global.getConfigByType = getConfigByType;
+
 // Setup config change listener voor runtime updates
 if (global.configManager) {
-    global.configManager.onChange((newConfig, newServerConfig) => {
-        console.log('\n🔄 [SERVER] Configuration updated, applying runtime changes...');
+    global.configManager.on('configChanged', ({ type, config: changedConfig }) => {
+        console.log(`\n🔄 [SERVER] ${type} configuration changed, applying runtime changes...`);
         
-        // Update global references
-        config = newConfig;
-        serverConfig = newServerConfig;
+        // Update runtime variabelen based on config type
+        if (type === 'server') {
+            // Update global server config reference
+            serverConfig = changedConfig;
+            console.log('✅ [SERVER] Server config updated:');
+            console.log(`   - Host: ${changedConfig.host}`);
+            console.log(`   - Port: ${changedConfig.port}`);
+            console.log(`   - HTTPS Port: ${changedConfig.httpsPort}`);
+            console.log(`   - HTTPS Enabled: ${changedConfig.enableHTTPS}`);
+        } else if (type === 'database') {
+            console.log('✅ [SERVER] Database config updated:');
+            console.log(`   - Host: ${changedConfig.host}`);
+            console.log(`   - Port: ${changedConfig.port}`);
+        } else if (type === 'ssl') {
+            console.log('✅ [SERVER] SSL config updated');
+        } else if (type === 'gameserver') {
+            console.log('✅ [SERVER] GameServer config updated:');
+            console.log(`   - Max Servers: ${changedConfig.maxServers}`);
+            console.log(`   - Auto Scale: ${changedConfig.autoScale}`);
+        }
         
-        console.log('✅ [SERVER] Runtime configuration updated:');
-        console.log(`   - Port: ${newServerConfig.port}`);
-        console.log(`   - HTTPS Port: ${newServerConfig.httpsPort}`);
-        console.log(`   - Host: ${newServerConfig.host}`);
-        console.log(`   - HTTPS Enabled: ${newServerConfig.enableHTTPS}`);
-        console.log('💡 [SERVER] Some changes may require restart for full effect\n');
+        console.log('💡 [SERVER] Configuration applied immediately (live reload active)\n');
+    });
+    
+    global.configManager.on('configSaved', ({ type, config: savedConfig }) => {
+        console.log(`💾 [SERVER] ${type} configuration saved to config/${type}.json`);
     });
 }
 

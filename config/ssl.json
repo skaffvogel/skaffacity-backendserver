@@ -1,0 +1,4 @@
+{
+  "keyPath": "../ssl/private-key.pem",
+  "certPath": "../ssl/certificate.pem"
+}

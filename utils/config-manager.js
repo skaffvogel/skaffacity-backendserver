@@ -1,315 +1,287 @@
 /**
- * Configuration Manager
- * Handles dynamic configuration loading and reloading
+ * Configuration Manager - New Modular System
+ * Handles separate config files in ./config directory with live reloading
  */
 
 const fs = require('fs');
 const path = require('path');
+const EventEmitter = require('events');
 
-class ConfigManager {
+class ConfigManager extends EventEmitter {
     constructor() {
-        this.configPath = path.join(__dirname, 'config.json');
-        this.config = null;
-        this.serverConfig = null;
-        this.changeCallbacks = [];
-        this.loadConfig();
+        super();
+        this.configDir = path.join(__dirname, '../config');
+        this.configs = new Map();
+        this.watchers = new Map();
+        this.configFiles = {
+            server: 'server.json',
+            database: 'database.json',
+            ssl: 'ssl.json',
+            gameserver: 'gameserver.json'
+        };
         
-        // Watch for config file changes
-        this.setupFileWatcher();
+        this.ensureConfigDirectory();
+        this.loadAllConfigs();
+        this.watchAllConfigs();
     }
 
-    /**
-     * Laad configuratie uit bestand
-     */
-    loadConfig() {
+    ensureConfigDirectory() {
+        if (!fs.existsSync(this.configDir)) {
+            console.log('[ConfigManager] Creating config directory...');
+            fs.mkdirSync(this.configDir, { recursive: true });
+        }
+    }
+
+    loadAllConfigs() {
+        console.log(`[ConfigManager] Loading configs from: ${this.configDir}`);
+        
+        for (const [configType, fileName] of Object.entries(this.configFiles)) {
+            this.loadConfig(configType, fileName);
+        }
+        
+        // Host validation after all configs are loaded
+        this.validateServerHost();
+        
+        console.log(`[ConfigManager] ✅ All configs loaded successfully`);
+        this.emit('configLoaded', this.getAllConfigs());
+    }
+
+    loadConfig(configType, fileName) {
+        const configPath = path.join(this.configDir, fileName);
+        
         try {
-            console.log('[CONFIG] Loading configuration...');
-            
-            // Controleer of config bestand bestaat
-            if (!fs.existsSync(this.configPath)) {
-                console.log('[CONFIG] ❌ Config file does not exist, creating default...');
-                this.createDefaultConfig();
+            if (!fs.existsSync(configPath)) {
+                console.log(`[ConfigManager] ${configType}.json not found, creating default...`);
+                this.createDefaultConfig(configType, configPath);
             }
             
-            const rawData = fs.readFileSync(this.configPath, 'utf8');
-            this.config = JSON.parse(rawData);
+            const configData = fs.readFileSync(configPath, 'utf8');
+            const config = JSON.parse(configData);
             
-            // Valideer config structuur
-            if (!this.config.server) {
-                throw new Error('Missing server configuration section');
-            }
+            this.configs.set(configType, config);
+            console.log(`[ConfigManager] ✅ Loaded ${configType} config`);
             
-            if (!this.config.ssl) {
-                throw new Error('Missing SSL configuration section');
-            }
+            this.emit('configChanged', { type: configType, config });
+        } catch (error) {
+            console.error(`[ConfigManager] ❌ Error loading ${configType} config: ${error.message}`);
+            this.createDefaultConfig(configType, configPath);
+        }
+    }
+
+    validateServerHost() {
+        const serverConfig = this.configs.get('server');
+        const databaseConfig = this.configs.get('database');
+        
+        if (serverConfig && databaseConfig && serverConfig.host === databaseConfig.host) {
+            console.log('[ConfigManager] ⚠️  WARNING: Server host matches database host, correcting to 0.0.0.0');
+            serverConfig.host = '0.0.0.0';
+            this.saveConfig('server', serverConfig);
+        }
+        
+        if (serverConfig) {
+            console.log(`[ConfigManager] Server will bind to: ${serverConfig.host}:${serverConfig.port}`);
+        }
+    }
+
+    createDefaultConfig(configType, configPath) {
+        let defaultConfig = {};
+        
+        switch (configType) {
+            case 'server':
+                defaultConfig = {
+                    port: 8000,
+                    httpsPort: 8443,
+                    host: '0.0.0.0',
+                    apiPrefix: '/api/v1',
+                    enableHTTPS: false
+                };
+                break;
+            case 'database':
+                defaultConfig = {
+                    host: '207.180.235.41',
+                    port: 3306,
+                    database: 's14_skaffacity',
+                    username: 'u14_Sz62GJBI8E'
+                };
+                break;
+            case 'ssl':
+                defaultConfig = {
+                    keyPath: '../ssl/private-key.pem',
+                    certPath: '../ssl/certificate.pem'
+                };
+                break;
+            case 'gameserver':
+                defaultConfig = {
+                    pterodactyl: {
+                        enabled: false,
+                        apiUrl: '',
+                        apiKey: '',
+                        serverId: ''
+                    },
+                    maxServers: 5,
+                    autoScale: true,
+                    serverTemplate: {
+                        name: 'SkaffaCity-GameServer',
+                        egg: 5,
+                        docker_image: 'ghcr.io/pterodactyl/yolks:nodejs_18',
+                        startup: 'node gameserver.js',
+                        environment: {
+                            STARTUP: 'node gameserver.js',
+                            P_SERVER_LOCATION: 'primary',
+                            P_SERVER_UUID: '{{uuid}}'
+                        },
+                        limits: {
+                            memory: 512,
+                            swap: 0,
+                            disk: 1024,
+                            io: 500,
+                            cpu: 100
+                        },
+                        feature_limits: {
+                            databases: 0,
+                            allocations: 1,
+                            backups: 0
+                        }
+                    }
+                };
+                break;
+        }
+        
+        try {
+            fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+            console.log(`[ConfigManager] ✅ Created default ${configType} config`);
+            this.configs.set(configType, defaultConfig);
+        } catch (error) {
+            console.error(`[ConfigManager] ❌ Error creating default ${configType} config: ${error.message}`);
+        }
+    }
+
+    watchAllConfigs() {
+        for (const [configType, fileName] of Object.entries(this.configFiles)) {
+            this.watchConfig(configType, fileName);
+        }
+    }
+
+    watchConfig(configType, fileName) {
+        const configPath = path.join(this.configDir, fileName);
+        
+        if (this.watchers.has(configType)) {
+            this.watchers.get(configType).close();
+        }
+        
+        try {
+            const watcher = fs.watch(configPath, (eventType) => {
+                if (eventType === 'change') {
+                    console.log(`[ConfigManager] 📁 ${configType} config changed, reloading...`);
+                    setTimeout(() => {
+                        this.loadConfig(configType, fileName);
+                    }, 100); // Small delay to ensure file write is complete
+                }
+            });
             
-            // Update server config met defaults voor ontbrekende velden en validatie
-            let serverHost = this.config.server.host || '0.0.0.0';
+            this.watchers.set(configType, watcher);
+            console.log(`[ConfigManager] 👀 Watching ${configType} config for changes`);
+        } catch (error) {
+            console.error(`[ConfigManager] ❌ Error watching ${configType} config: ${error.message}`);
+        }
+    }
+
+    // Get specific config
+    getConfig(configType) {
+        if (!configType) {
+            return this.getAllConfigs();
+        }
+        return this.configs.get(configType);
+    }
+
+    // Get all configs as combined object (for backward compatibility)
+    getAllConfigs() {
+        const combined = {};
+        for (const [type, config] of this.configs) {
+            combined[type] = config;
+        }
+        return combined;
+    }
+
+    // Get server config (most used)
+    getServerConfig() {
+        return this.configs.get('server');
+    }
+
+    // Get database config
+    getDatabaseConfig() {
+        return this.configs.get('database');
+    }
+
+    // Get SSL config
+    getSSLConfig() {
+        return this.configs.get('ssl');
+    }
+
+    // Get gameserver config
+    getGameServerConfig() {
+        return this.configs.get('gameserver');
+    }
+
+    // Save specific config
+    saveConfig(configType, newConfig) {
+        const configPath = path.join(this.configDir, this.configFiles[configType]);
+        
+        try {
+            // Update in memory
+            this.configs.set(configType, newConfig);
             
-            // Prevent using database IP as server host
-            if (serverHost === '207.180.235.41') {
-                console.warn('[CONFIG] ⚠️ Database IP detected as server host, correcting to 0.0.0.0');
-                serverHost = '0.0.0.0';
-            }
+            // Save to file
+            fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf8');
             
-            this.serverConfig = {
-                port: this.config.server.port || 8000,
-                httpsPort: this.config.server.httpsPort || 8443,
-                host: serverHost,
-                apiPrefix: this.config.server.apiPrefix || '/api/v1',
-                enableHTTPS: this.config.server.enableHTTPS || false,
-                sslKeyPath: path.join(__dirname, this.config.ssl.keyPath || '../ssl/private-key.pem'),
-                sslCertPath: path.join(__dirname, this.config.ssl.certPath || '../ssl/certificate.pem')
-            };
-            
-            console.log('[CONFIG] ✅ Configuration loaded successfully');
-            
-            // Trigger change callbacks
-            this.notifyChanges();
+            console.log(`[ConfigManager] ✅ Saved ${configType} config`);
+            this.emit('configSaved', { type: configType, config: newConfig });
             
             return true;
         } catch (error) {
-            console.error('[CONFIG] ❌ Failed to load configuration:', error.message);
-            console.log('[CONFIG] 🔧 Attempting to create default configuration...');
-            
-            try {
-                this.createDefaultConfig();
-                return this.loadConfig(); // Probeer opnieuw na het maken van default config
-            } catch (createError) {
-                console.error('[CONFIG] ❌ Failed to create default config:', createError.message);
-                return false;
-            }
-        }
-    }
-
-    /**
-     * Maak default configuratie bestand
-     */
-    createDefaultConfig() {
-        const defaultConfig = {
-            "server": {
-                "port": 8000,
-                "httpsPort": 8443,
-                "host": "0.0.0.0",
-                "apiPrefix": "/api/v1",
-                "enableHTTPS": false
-            },
-            "ssl": {
-                "keyPath": "../ssl/private-key.pem",
-                "certPath": "../ssl/certificate.pem"
-            },
-            "database": {
-                "host": "207.180.235.41",
-                "port": 3306,
-                "database": "s14_skaffacity",
-                "username": "u14_Sz62GJBI8E"
-            },
-            "gameServer": {
-                "pterodactyl": {
-                    "enabled": false,
-                    "apiUrl": "",
-                    "apiKey": "",
-                    "serverId": ""
-                },
-                "maxServers": 5,
-                "autoScale": true,
-                "serverTemplate": {
-                    "name": "SkaffaCity-GameServer",
-                    "egg": 5,
-                    "docker_image": "ghcr.io/pterodactyl/yolks:nodejs_18",
-                    "startup": "node gameserver.js"
-                }
-            },
-            "security": {
-                "jwtSecret": "your-jwt-secret-key",
-                "bcryptRounds": 10,
-                "rateLimitWindowMs": 900000,
-                "rateLimitMax": 100
-            },
-            "logging": {
-                "level": "info",
-                "enableConsole": true,
-                "enableFile": true,
-                "logDirectory": "./logs"
-            }
-        };
-        
-        fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
-        console.log('[CONFIG] ✅ Default configuration file created');
-    }
-
-    /**
-     * Herlaad configuratie
-     */
-    reloadConfig() {
-        console.log('[CONFIG] 🔄 Reloading configuration...');
-        const success = this.loadConfig();
-        
-        if (success) {
-            console.log('[CONFIG] ✅ Configuration reloaded successfully');
-            console.log('[CONFIG] Updated settings:', {
-                port: this.serverConfig.port,
-                httpsPort: this.serverConfig.httpsPort,
-                host: this.serverConfig.host,
-                enableHTTPS: this.serverConfig.enableHTTPS
-            });
-        } else {
-            console.log('[CONFIG] ❌ Failed to reload configuration');
-        }
-        
-        return success;
-    }
-
-    /**
-     * Setup file watcher voor automatische reload
-     */
-    setupFileWatcher() {
-        try {
-            // Alleen file watcher opzetten als bestand bestaat
-            if (fs.existsSync(this.configPath)) {
-                fs.watchFile(this.configPath, { interval: 1000 }, (curr, prev) => {
-                    if (curr.mtime > prev.mtime) {
-                        console.log('\n🔄 [CONFIG] Configuration file changed, reloading...');
-                        const success = this.reloadConfig();
-                        if (success) {
-                            console.log('✅ [CONFIG] Live configuration update applied!');
-                            console.log('💡 [CONFIG] Some changes may require server restart\n');
-                        } else {
-                            console.log('❌ [CONFIG] Failed to reload configuration\n');
-                        }
-                    }
-                });
-                console.log('[CONFIG] 👀 File watcher active for automatic config reload');
-            } else {
-                console.log('[CONFIG] ⚠️ Config file not found, skipping file watcher setup');
-            }
-        } catch (error) {
-            console.warn('[CONFIG] ⚠️ Could not setup file watcher:', error.message);
-        }
-    }
-
-    /**
-     * Get current configuration
-     */
-    getConfig() {
-        if (!this.config) {
-            console.warn('[CONFIG] ⚠️ Configuration not loaded, attempting to load...');
-            this.loadConfig();
-        }
-        return this.config;
-    }
-
-    /**
-     * Get server configuration
-     */
-    getServerConfig() {
-        if (!this.serverConfig) {
-            console.warn('[CONFIG] ⚠️ Server configuration not loaded, attempting to load...');
-            this.loadConfig();
-        }
-        return this.serverConfig;
-    }
-
-    /**
-     * Update configuration
-     */
-    updateConfig(newConfig) {
-        try {
-            fs.writeFileSync(this.configPath, JSON.stringify(newConfig, null, 2), 'utf8');
-            console.log('[CONFIG] ✅ Configuration file updated');
-            return this.reloadConfig();
-        } catch (error) {
-            console.error('[CONFIG] ❌ Failed to update configuration:', error.message);
+            console.error(`[ConfigManager] ❌ Error saving ${configType} config: ${error.message}`);
             return false;
         }
     }
 
-    /**
-     * Get nested config value
-     */
-    get(path) {
-        return path.split('.').reduce((current, key) => {
-            return current && current[key] !== undefined ? current[key] : undefined;
-        }, this.config);
-    }
-
-    /**
-     * Set nested config value
-     */
-    set(path, value) {
-        const keys = path.split('.');
-        const lastKey = keys.pop();
-        const target = keys.reduce((current, key) => {
-            if (!current[key] || typeof current[key] !== 'object') {
-                current[key] = {};
-            }
-            return current[key];
-        }, this.config);
-        
-        if (target && lastKey) {
-            target[lastKey] = value;
-            return this.updateConfig(this.config);
+    // Update specific config property
+    updateConfig(configType, path, value) {
+        const config = this.configs.get(configType);
+        if (!config) {
+            console.error(`[ConfigManager] ❌ Config type '${configType}' not found`);
+            return false;
         }
-        return false;
-    }
 
-    /**
-     * Validate configuration
-     */
-    validate() {
-        const errors = [];
+        // Handle nested path like "server.port" or "pterodactyl.enabled"
+        const pathParts = path.split('.');
+        let current = config;
         
-        // Validate required server settings
-        if (!this.config.server) {
-            errors.push('Missing server configuration');
-        } else {
-            if (!this.config.server.port || typeof this.config.server.port !== 'number') {
-                errors.push('Invalid server port');
+        for (let i = 0; i < pathParts.length - 1; i++) {
+            if (!current[pathParts[i]]) {
+                current[pathParts[i]] = {};
             }
-            if (!this.config.server.host || typeof this.config.server.host !== 'string') {
-                errors.push('Invalid server host');
-            }
+            current = current[pathParts[i]];
         }
         
-        // Validate database settings
-        if (!this.config.database) {
-            errors.push('Missing database configuration');
-        }
+        current[pathParts[pathParts.length - 1]] = value;
         
-        return {
-            valid: errors.length === 0,
-            errors: errors
-        };
+        return this.saveConfig(configType, config);
     }
 
-    /**
-     * Register callback voor configuratie wijzigingen
-     */
-    onChange(callback) {
-        this.changeCallbacks.push(callback);
+    // Reload all configs from disk
+    reloadAllConfigs() {
+        console.log('[ConfigManager] 🔄 Reloading all configs...');
+        this.loadAllConfigs();
     }
 
-    /**
-     * Notify all registered callbacks
-     */
-    notifyChanges() {
-        for (const callback of this.changeCallbacks) {
-            try {
-                callback(this.config, this.serverConfig);
-            } catch (error) {
-                console.error('[CONFIG] ❌ Error in change callback:', error.message);
-            }
+    // Cleanup
+    cleanup() {
+        console.log('[ConfigManager] 🧹 Cleaning up watchers...');
+        for (const watcher of this.watchers.values()) {
+            watcher.close();
         }
-    }
-
-    /**
-     * Get live server configuration (always current)
-     */
-    getLiveServerConfig() {
-        // Always return the most current server config
-        return this.getServerConfig();
+        this.watchers.clear();
     }
 }
 
-// Export singleton instance
-module.exports = new ConfigManager();
+module.exports = ConfigManager;

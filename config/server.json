@@ -1,0 +1,7 @@
+{
+  "port": 8000,
+  "httpsPort": 8443,
+  "host": "0.0.0.0",
+  "apiPrefix": "/api/v1",
+  "enableHTTPS": false
+}

@@ -25,6 +25,9 @@ class TestCommand {
             case 'host':
                 await this.testHostConfig();
                 break;
+            case 'modular':
+                await this.testModularConfig();
+                break;
             default:
                 this.showHelp();
                 break;
@@ -162,15 +165,15 @@ class TestCommand {
     }
 
     async testHostConfig() {
-        console.log('[TEST] 🏠 Testing host configuration...');
+        console.log('[TEST] 🏠 Testing modular host configuration...');
         
-        console.log('\n[TEST] ConfigManager configuration:');
+        console.log('\n[TEST] ConfigManager modular configuration:');
         if (global.configManager) {
-            const config = global.configManager.getConfig();
-            const serverConfig = global.configManager.getServerConfig();
+            const serverConfig = global.configManager.getConfig('server');
+            const databaseConfig = global.configManager.getConfig('database');
             
-            console.log(`[TEST] Raw config.server.host: ${config?.server?.host}`);
-            console.log(`[TEST] ServerConfig.host: ${serverConfig?.host}`);
+            console.log(`[TEST] Server config host: ${serverConfig?.host}`);
+            console.log(`[TEST] Database config host: ${databaseConfig?.host}`);
         } else {
             console.log('[TEST] ❌ ConfigManager not available');
         }
@@ -185,20 +188,31 @@ class TestCommand {
             console.log('[TEST] ❌ getCurrentServerConfig not available');
         }
         
-        console.log('\n[TEST] Raw config.json file:');
+        console.log('\n[TEST] Raw config files:');
         try {
             const fs = require('fs');
             const path = require('path');
-            const configPath = path.join(__dirname, '../config.json');
-            const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            console.log(`[TEST] File server.host: ${rawConfig.server?.host}`);
-            console.log(`[TEST] File database.host: ${rawConfig.database?.host}`);
+            
+            // Check server.json
+            const serverPath = path.join(__dirname, '../config/server.json');
+            if (fs.existsSync(serverPath)) {
+                const serverConfig = JSON.parse(fs.readFileSync(serverPath, 'utf8'));
+                console.log(`[TEST] server.json host: ${serverConfig.host}`);
+            }
+            
+            // Check database.json
+            const dbPath = path.join(__dirname, '../config/database.json');
+            if (fs.existsSync(dbPath)) {
+                const dbConfig = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+                console.log(`[TEST] database.json host: ${dbConfig.host}`);
+            }
         } catch (error) {
-            console.log(`[TEST] ❌ Error reading config.json: ${error.message}`);
+            console.log(`[TEST] ❌ Error reading config files: ${error.message}`);
         }
         
-        console.log('\n[TEST] 💡 Host should be 0.0.0.0 for server binding');
+        console.log('\n[TEST] 💡 Server host should be 0.0.0.0 for binding');
         console.log('[TEST] 💡 Database host (207.180.235.41) should be separate');
+        console.log('[TEST] 🔄 Changes to config files are applied immediately with live reload');
     }
 
     makeHttpRequest(options) {
@@ -234,6 +248,45 @@ class TestCommand {
         });
     }
 
+    async testModularConfig() {
+        console.log('[TEST] 🔧 Testing modular configuration system...');
+        
+        if (!global.configManager) {
+            console.log('[TEST] ❌ ConfigManager not available');
+            return;
+        }
+        
+        console.log('\n[TEST] 📁 Available config files:');
+        const allConfigs = global.configManager.getAllConfigs();
+        for (const [type, config] of Object.entries(allConfigs)) {
+            console.log(`[TEST] ✅ ${type}.json - ${Object.keys(config).length} properties`);
+        }
+        
+        console.log('\n[TEST] 🔄 Testing live reload - making test changes...');
+        
+        // Test changing server port
+        console.log('[TEST] Testing server.port change...');
+        const originalPort = global.configManager.getConfig('server').port;
+        const testPort = originalPort === 8000 ? 8001 : 8000;
+        
+        const success1 = global.configManager.updateConfig('server', 'port', testPort);
+        console.log(`[TEST] ${success1 ? '✅' : '❌'} Changed server.port to ${testPort}`);
+        
+        // Wait a moment
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Change back
+        const success2 = global.configManager.updateConfig('server', 'port', originalPort);
+        console.log(`[TEST] ${success2 ? '✅' : '❌'} Restored server.port to ${originalPort}`);
+        
+        console.log('\n[TEST] 🌐 API endpoints test:');
+        console.log('[TEST] curl http://localhost:8000/api/v1/config/status');
+        console.log('[TEST] curl http://localhost:8000/api/v1/config/server');
+        console.log('[TEST] curl http://localhost:8000/api/v1/config/all');
+        
+        console.log('\n[TEST] ✅ Modular configuration test completed');
+    }
+
     showHelp() {
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                    Test Command Help                     ║');
@@ -241,6 +294,8 @@ class TestCommand {
         console.log('║  test config          - Test live config updates        ║');
         console.log('║  test live            - Test live config functions      ║');
         console.log('║  test api             - Test config API endpoints       ║');
+        console.log('║  test host            - Test host configuration         ║');
+        console.log('║  test modular         - Test modular config system      ║');
         console.log('║                                                          ║');
         console.log('║  These tests verify that configuration changes are      ║');
         console.log('║  applied immediately without server restart             ║');
