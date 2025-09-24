@@ -163,9 +163,18 @@ class GameServerManager {
 
         const serverId = uuidv4();
         const serverName = `SkaffaCity-GameServer-${Date.now()}`;
-        const serverPort = this.serverConfig.serverStartPort + this.servers.size;
 
         try {
+            // Find next available port based on existing servers
+            console.log('[GameServerManager] 🔍 Finding next available port...');
+            const nextPort = await this.getNextAvailablePort();
+            
+            // Check if allocation exists for this port, if not create it
+            console.log(`[GameServerManager] 🔍 Checking allocation for port ${nextPort}...`);
+            const allocation = await this.ensureAllocationExists(nextPort);
+            
+            console.log(`[GameServerManager] ✅ Using allocation ID: ${allocation.id} (${allocation.ip}:${allocation.port})`);
+
             // Get configuration from modular config
             const gameserverConfig = global.configManager ? global.configManager.getConfig('gameserver') : null;
             const serverTemplate = gameserverConfig?.serverTemplate || {};
@@ -191,12 +200,12 @@ class GameServerManager {
                     backups: 0
                 },
                 allocation: {
-                    default: serverPort
+                    default: allocation.id
                 },
                 environment: {
                     ...(serverTemplate.environment || {}),
                     GAME_SERVER_ID: serverId,
-                    GAME_SERVER_PORT: serverPort.toString(),
+                    GAME_SERVER_PORT: allocation.port.toString(),
                     MASTER_SERVER_URL: process.env.MASTER_SERVER_URL || 'https://localhost:8443',
                     MAX_PLAYERS: this.serverConfig.maxPlayersPerServer.toString()
                 }
@@ -223,7 +232,7 @@ class GameServerManager {
                     status: 'starting',
                     playerCount: 0,
                     maxPlayers: this.serverConfig.maxPlayersPerServer,
-                    port: serverPort,
+                    port: allocation.port,
                     lastUpdate: Date.now()
                 };
 
@@ -573,6 +582,117 @@ class GameServerManager {
         }
         
         return { targetCount, currentCount, action: targetCount > currentCount ? 'scaled_up' : targetCount < currentCount ? 'scaled_down' : 'no_change' };
+    }
+
+    /**
+     * Get next available port starting from serverStartPort
+     */
+    async getNextAvailablePort() {
+        try {
+            // Get all existing servers from Pterodactyl
+            const existingServers = await this.listServers();
+            const usedPorts = new Set();
+            
+            // Collect all used ports
+            for (const server of existingServers) {
+                if (server.attributes && server.attributes.relationships && server.attributes.relationships.allocations) {
+                    const allocations = server.attributes.relationships.allocations.data || [];
+                    for (const alloc of allocations) {
+                        if (alloc.attributes && alloc.attributes.port) {
+                            usedPorts.add(alloc.attributes.port);
+                        }
+                    }
+                }
+            }
+            
+            // Find next available port starting from serverStartPort
+            let nextPort = this.serverConfig.serverStartPort;
+            while (usedPorts.has(nextPort)) {
+                nextPort++;
+            }
+            
+            console.log(`[GameServerManager] 📊 Used ports: [${Array.from(usedPorts).sort().join(', ')}]`);
+            console.log(`[GameServerManager] 🎯 Next available port: ${nextPort}`);
+            
+            return nextPort;
+        } catch (error) {
+            console.warn('[GameServerManager] ⚠️ Could not get existing servers, using default port logic');
+            // Fallback: use local servers count + start port
+            return this.serverConfig.serverStartPort + this.servers.size;
+        }
+    }
+
+    /**
+     * Ensure allocation exists for the given port, create if it doesn't exist
+     */
+    async ensureAllocationExists(port) {
+        const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
+        
+        try {
+            // First, get all allocations to see if this port exists
+            console.log(`[GameServerManager] 🔍 Checking if allocation exists for port ${port}...`);
+            
+            const allocationsResponse = await axios.get(`${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            // Check if allocation for this port already exists
+            if (allocationsResponse.data && allocationsResponse.data.data) {
+                const existingAllocation = allocationsResponse.data.data.find(alloc => 
+                    alloc.attributes && alloc.attributes.port === port
+                );
+                
+                if (existingAllocation) {
+                    console.log(`[GameServerManager] ✅ Allocation already exists for port ${port}`);
+                    return {
+                        id: existingAllocation.attributes.id,
+                        port: existingAllocation.attributes.port,
+                        ip: existingAllocation.attributes.ip
+                    };
+                }
+            }
+            
+            // Allocation doesn't exist, create it
+            console.log(`[GameServerManager] 🔨 Creating new allocation for port ${port}...`);
+            
+            const createAllocationRequest = {
+                ip: '0.0.0.0', // Default IP, adjust if needed
+                port: port,
+                assigned: false
+            };
+            
+            const createResponse = await axios.post(
+                `${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`,
+                createAllocationRequest,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            
+            if (createResponse.status === 201) {
+                console.log(`[GameServerManager] ✅ Created new allocation for port ${port}`);
+                return {
+                    id: createResponse.data.attributes.id,
+                    port: createResponse.data.attributes.port,
+                    ip: createResponse.data.attributes.ip
+                };
+            }
+            
+        } catch (error) {
+            console.error(`[GameServerManager] ❌ Error managing allocation for port ${port}:`, error.message);
+            
+            if (error.response) {
+                console.error('[GameServerManager] 📋 Allocation API Error:', JSON.stringify(error.response.data, null, 2));
+            }
+            
+            throw new Error(`Failed to ensure allocation exists for port ${port}: ${error.message}`);
+        }
     }
 
     /**
