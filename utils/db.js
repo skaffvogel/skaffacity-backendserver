@@ -188,6 +188,121 @@ const runMigrations = async () => {
     
     console.log('Database migraties voltooid');
     
+    // Nieuwe game features tabellen
+    // Mining sessions
+    await query(`
+      CREATE TABLE IF NOT EXISTS mining_sessions (
+        id VARCHAR(36) PRIMARY KEY,
+        player_id VARCHAR(36) NOT NULL,
+        location_id VARCHAR(50) NOT NULL,
+        status ENUM('active', 'completed', 'abandoned') DEFAULT 'active',
+        start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        end_time TIMESTAMP NULL,
+        estimated_end_time TIMESTAMP NULL,
+        rewards_claimed BOOLEAN DEFAULT false,
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+        INDEX idx_player_status (player_id, status),
+        INDEX idx_location_status (location_id, status)
+      )
+    `);
+
+    // Shop transactions
+    await query(`
+      CREATE TABLE IF NOT EXISTS shop_transactions (
+        id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        player_id VARCHAR(36) NOT NULL,
+        item_id VARCHAR(50) NOT NULL,
+        quantity INT DEFAULT 1,
+        total_price DECIMAL(15,2) NOT NULL,
+        transaction_type ENUM('purchase', 'sale') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+        INDEX idx_player_type (player_id, transaction_type),
+        INDEX idx_item_type (item_id, transaction_type)
+      )
+    `);
+
+    // Faction wars
+    await query(`
+      CREATE TABLE IF NOT EXISTS faction_wars (
+        id VARCHAR(36) PRIMARY KEY,
+        attacker_faction_id INT NOT NULL,
+        defender_faction_id INT NOT NULL,
+        declared_by VARCHAR(36) NOT NULL,
+        reason TEXT,
+        status ENUM('active', 'ended', 'cancelled') DEFAULT 'active',
+        start_time TIMESTAMP NOT NULL,
+        end_time TIMESTAMP NOT NULL,
+        attacker_kills INT DEFAULT 0,
+        defender_kills INT DEFAULT 0,
+        winner_faction_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (attacker_faction_id) REFERENCES factions(id) ON DELETE CASCADE,
+        FOREIGN KEY (defender_faction_id) REFERENCES factions(id) ON DELETE CASCADE,
+        FOREIGN KEY (declared_by) REFERENCES players(id) ON DELETE CASCADE,
+        FOREIGN KEY (winner_faction_id) REFERENCES factions(id) ON DELETE SET NULL,
+        INDEX idx_status_time (status, start_time, end_time)
+      )
+    `);
+
+    // Faction war kills
+    await query(`
+      CREATE TABLE IF NOT EXISTS faction_war_kills (
+        id VARCHAR(36) PRIMARY KEY,
+        war_id VARCHAR(36) NOT NULL,
+        killer_id VARCHAR(36) NOT NULL,
+        victim_id VARCHAR(36) NOT NULL,
+        kill_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        skaff_reward DECIMAL(15,2) DEFAULT 0,
+        FOREIGN KEY (war_id) REFERENCES faction_wars(id) ON DELETE CASCADE,
+        FOREIGN KEY (killer_id) REFERENCES players(id) ON DELETE CASCADE,
+        FOREIGN KEY (victim_id) REFERENCES players(id) ON DELETE CASCADE,
+        INDEX idx_war_time (war_id, kill_time),
+        INDEX idx_killer_time (killer_id, kill_time)
+      )
+    `);
+
+    // Faction territories
+    await query(`
+      CREATE TABLE IF NOT EXISTS faction_territories (
+        id VARCHAR(36) PRIMARY KEY,
+        faction_id INT NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        center_x FLOAT NOT NULL,
+        center_z FLOAT NOT NULL,
+        radius FLOAT DEFAULT 50,
+        claimed_by VARCHAR(36) NOT NULL,
+        claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT true,
+        FOREIGN KEY (faction_id) REFERENCES factions(id) ON DELETE CASCADE,
+        FOREIGN KEY (claimed_by) REFERENCES players(id) ON DELETE CASCADE,
+        INDEX idx_faction_active (faction_id, is_active),
+        INDEX idx_coordinates (center_x, center_z)
+      )
+    `);
+
+    // Player stats voor levels en experience
+    await query(`
+      CREATE TABLE IF NOT EXISTS player_stats (
+        player_id VARCHAR(36) PRIMARY KEY,
+        level INT DEFAULT 1,
+        experience BIGINT DEFAULT 0,
+        mining_level INT DEFAULT 1,
+        mining_xp BIGINT DEFAULT 0,
+        combat_level INT DEFAULT 1,
+        combat_xp BIGINT DEFAULT 0,
+        total_kills INT DEFAULT 0,
+        total_deaths INT DEFAULT 0,
+        total_playtime BIGINT DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('Game features database tabellen aangemaakt');
+    
     // Initialiseer model tabellen na migraties
     await initModelTables();
   } catch (error) {

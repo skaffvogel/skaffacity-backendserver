@@ -79,12 +79,21 @@ app.use((req, res, next) => {
 const apiPrefix = serverConfig.apiPrefix;
 
 app.use(`${apiPrefix}/auth`, authRoutes);
-app.use(`${apiPrefix}/player`, authenticateToken, playerRoutes);
+app.use(`${apiPrefix}/players`, authenticateToken, playerRoutes);
 app.use(`${apiPrefix}/economy`, authenticateToken, economyRoutes);
 app.use(`${apiPrefix}/inventory`, authenticateToken, inventoryRoutes);
 app.use(`${apiPrefix}/safezone`, authenticateToken, safeZoneRoutes);
 app.use(`${apiPrefix}/cosmetics`, authenticateToken, cosmeticsRoutes);
 app.use(`${apiPrefix}/oven`, authenticateToken, ovenRoutes);
+
+// Nieuwe game features
+const miningRoutes = require('./api/mining.routes');
+const shopRoutes = require('./api/shop.routes');
+const factionWarsRoutes = require('./api/faction-wars.routes');
+
+app.use(`${apiPrefix}/mining`, miningRoutes);
+app.use(`${apiPrefix}/shop`, shopRoutes);
+app.use(`${apiPrefix}/faction-wars`, factionWarsRoutes);
 
 // Health check endpoint
 app.get(`${apiPrefix}/health`, (req, res) => {
