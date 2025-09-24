@@ -463,6 +463,43 @@ class GameServerManager {
             estimatedWaitTime: 0
         };
     }
+
+    /**
+     * List all game servers
+     */
+    async listServers() {
+        console.log('[GameServerManager] Servers ophalen van Pterodactyl...');
+        
+        const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
+        if (!apiKey) {
+            throw new Error('Geen API key geconfigureerd voor server listing');
+        }
+
+        try {
+            const response = await axios.get(`${this.pterodactylConfig.apiUrl}/application/servers`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.status === 200) {
+                return response.data.data || [];
+            } else {
+                throw new Error(`Pterodactyl API error: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('[GameServerManager] ❌ Error listing servers:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Get server info from local servers map
+     */
+    getLocalServers() {
+        return Array.from(this.servers.values());
+    }
 }
 
 module.exports = GameServerManager;
