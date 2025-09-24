@@ -232,9 +232,14 @@ class GameServerManager {
                     REGION: serverTemplate.environment?.REGION || 'EU-West',
                     GAME_MODE: serverTemplate.environment?.GAME_MODE || 'standard',
                     
-                    // GitHub Integration for Auto Updates (Primary Method)
+                    // Git Repository Integration (New Method)
+                    GIT_REPOSITORY: serverTemplate.environment?.GIT_REPOSITORY || 'https://github.com/skaffvogel/skaffacity-serverbuild.git',
+                    GIT_BRANCH: serverTemplate.environment?.GIT_BRANCH || 'main',
+                    GIT_ACCESS_TOKEN: serverTemplate.environment?.GIT_ACCESS_TOKEN || '',
+                    
+                    // GitHub Integration for Auto Updates (Legacy Support)
                     GITHUB_REPO: serverTemplate.environment?.GITHUB_REPO || 'skaffvogel/skaffacity-serverbuild',
-                    GITHUB_BRANCH: serverTemplate.environment?.GITHUB_BRANCH || 'master',
+                    GITHUB_BRANCH: serverTemplate.environment?.GITHUB_BRANCH || 'main',
                     AUTO_UPDATE: serverTemplate.environment?.AUTO_UPDATE || '1',
                     
                     // Fallback download URL (only used if GitHub fails or is disabled)

@@ -377,28 +377,39 @@ class GameServerCommand {
                 // Force Unity server template configuration
                 manager.unityServerTemplate = {
                     egg: parseInt(targetEggId),
-                    docker_image: 'ghcr.io/pterodactyl/yolks:ubuntu',
-                    startup: './{{SERVER_JARFILE}} -batchmode -nographics -port {{SERVER_PORT}} -masterServer {{MASTER_SERVER_URL}} -serverName "{{SERVER_NAME}}" -maxPlayers {{MAX_PLAYERS}} -tickRate {{TICK_RATE}} -logFile logs/server.log -region {{REGION}} -gameMode {{GAME_MODE}} -autoUpdate {{AUTO_UPDATE}}',
+                    docker_image: 'ghcr.io/parkervcp/yolks:ubuntu',
+                    startup: './SkaffaCityServer.x86_64 -batchmode -nographics -port {{SERVER_PORT}} -masterServer {{MASTER_SERVER_URL}} -serverName "{{SERVER_NAME}}" -maxPlayers {{MAX_PLAYERS}} -tickRate {{TICK_RATE}} -region {{REGION}} -gameMode {{GAME_MODE}}',
                     description: 'SkaffaCity Unity Dedicated Server - Auto-updating from GitHub',
                     limits: {
-                        memory: 2048, // 2GB for Unity server
-                        swap: 0,
-                        disk: 5120, // 5GB for Unity build
+                        memory: 3072, // 3GB for Unity server (increased)
+                        swap: 512,    // 512MB swap for stability
+                        disk: 8192,   // 8GB for Unity build + logs
                         io: 500,
-                        cpu: 200, // 200% CPU for Unity performance
+                        cpu: 300,     // 300% CPU for Unity performance
                         threads: null
                     },
                     feature_limits: {
                         databases: 0,
                         allocations: 1,
-                        backups: 1
+                        backups: 2
+                    },
+                    environment: {
+                        SERVER_JARFILE: 'auto-detect',
+                        MASTER_SERVER_URL: 'http://207.180.235.41:3000',
+                        MAX_PLAYERS: '50',
+                        TICK_RATE: '30',
+                        REGION: 'EU-West',
+                        GAME_MODE: 'standard',
+                        GIT_REPOSITORY: 'https://github.com/skaffvogel/skaffacity-serverbuild.git',
+                        GIT_BRANCH: 'main'
                     }
                 };
                 
                 console.log(`[GAMESERVER] 🥚 Using egg ID: ${targetEggId} (SkaffaCity Unity Server)`);
-                console.log(`[GAMESERVER] 🐙 Creating with GitHub auto-update enabled`);
-                console.log(`[GAMESERVER] 📦 Repository: skaffvogel/skaffacity-serverbuild`);
-                console.log(`[GAMESERVER] 🔧 Unity optimized: 2GB RAM, 5GB Disk, 200% CPU`);
+                console.log(`[GAMESERVER] 🐙 Docker Image: ghcr.io/parkervcp/yolks:ubuntu`);
+                console.log(`[GAMESERVER] 📦 Git Repository: https://github.com/skaffvogel/skaffacity-serverbuild.git`);
+                console.log(`[GAMESERVER] 🌿 Git Branch: main`);
+                console.log(`[GAMESERVER] 🔧 Unity optimized: 3GB RAM, 8GB Disk, 300% CPU`);
                 
                 const newServer = await manager.createServerWithTemplate(manager.unityServerTemplate);
                 
@@ -412,8 +423,10 @@ class GameServerCommand {
                 // Show server connection info
                 console.log(`[GAMESERVER] 🌐 Server IP: 207.180.235.41:${newServer.port || '7001'}`);
                 console.log(`[GAMESERVER] 📊 Master Server: http://207.180.235.41:3000`);
-                console.log(`[GAMESERVER] 🎮 Max Players: 50`);
-                console.log(`[GAMESERVER] ⚡ Tick Rate: 30 Hz`);
+                console.log(`[GAMESERVER] 🎮 Max Players: 50 | Region: EU-West`);
+                console.log(`[GAMESERVER] ⚡ Tick Rate: 30 Hz | Game Mode: standard`);
+                console.log(`[GAMESERVER] 🔄 Auto-update: Enabled from GitHub`);
+                console.log(`[GAMESERVER] 🚀 Server will auto-install and start from latest build`);
                 
             } else {
                 console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
@@ -536,22 +549,23 @@ class GameServerCommand {
         console.log('╠══════════════════════════════════════════════════════════╣');
         console.log('║  gameserver list            - List all game servers     ║');
         console.log('║  gameserver create          - Create new game server    ║');
-        console.log('║  gameserver createwithegg   - Create SkaffaCity Unity   ║');
-        console.log('║                               Server (Egg ID 20)        ║');
-        console.log('║  gameserver start [id]      - Start server (or create)  ║');
-        console.log('║  gameserver stop <id>       - Stop specific server      ║');
-        console.log('║  gameserver status          - Show server status        ║');
-        console.log('║  gameserver config          - Show configuration        ║');
-        console.log('║  gameserver pterodactyl     - Test Pterodactyl API      ║');
-        console.log('║  gameserver scale <count>   - Scale to specific count   ║');
+        console.log('║  gameserver createwithegg [id] - Create SkaffaCity Unity ║');
+        console.log('║                                  Server (Default: ID 20) ║');
+        console.log('║  gameserver start [id]         - Start server (or create)║');
+        console.log('║  gameserver stop <id>          - Stop specific server    ║');
+        console.log('║  gameserver status             - Show server status      ║');
+        console.log('║  gameserver config             - Show configuration      ║');
+        console.log('║  gameserver pterodactyl        - Test Pterodactyl API    ║');
+        console.log('║  gameserver scale <count>      - Scale to specific count ║');
         console.log('║  gameserver createallocations <start> <end>             ║');
-        console.log('║                               - Create port allocations ║');
+        console.log('║                                - Create port allocations ║');
         console.log('║                                                          ║');
-        console.log('║  🎮 SkaffaCity Unity Servers include:                   ║');
-        console.log('║    • Auto-update from GitHub (skaffacity-serverbuild)   ║');
-        console.log('║    • UDP networking with master server integration      ║');
-        console.log('║    • Real-time multiplayer support (up to 50 players)   ║');
-        console.log('║    • Pterodactyl panel management and monitoring        ║');
+        console.log('║  🎮 SkaffaCity Unity Server Features:                   ║');
+        console.log('║    • 🔄 Auto-update via Git (skaffacity-serverbuild)    ║');
+        console.log('║    • 🐳 Docker: ghcr.io/parkervcp/yolks:ubuntu         ║');
+        console.log('║    • 🚀 Resources: 3GB RAM, 8GB Disk, 300% CPU         ║');
+        console.log('║    • 🌐 UDP networking + Master server (207.180.235.41) ║');
+        console.log('║    • 👥 Up to 50 players, 30Hz tick rate, EU-West      ║');
         console.log('╚══════════════════════════════════════════════════════════╝\n');
     }
 
