@@ -22,6 +22,9 @@ class TestCommand {
             case 'api':
                 await this.testConfigAPI();
                 break;
+            case 'host':
+                await this.testHostConfig();
+                break;
             default:
                 this.showHelp();
                 break;
@@ -156,6 +159,46 @@ class TestCommand {
         console.log('\n[TEST] 💡 You can also test manually:');
         console.log('[TEST] curl http://localhost:8000/api/v1/config/current');
         console.log('[TEST] curl http://localhost:8000/api/v1/config/status');
+    }
+
+    async testHostConfig() {
+        console.log('[TEST] 🏠 Testing host configuration...');
+        
+        console.log('\n[TEST] ConfigManager configuration:');
+        if (global.configManager) {
+            const config = global.configManager.getConfig();
+            const serverConfig = global.configManager.getServerConfig();
+            
+            console.log(`[TEST] Raw config.server.host: ${config?.server?.host}`);
+            console.log(`[TEST] ServerConfig.host: ${serverConfig?.host}`);
+        } else {
+            console.log('[TEST] ❌ ConfigManager not available');
+        }
+        
+        console.log('\n[TEST] getCurrentServerConfig():');
+        if (global.getCurrentServerConfig) {
+            const currentConfig = global.getCurrentServerConfig();
+            console.log(`[TEST] Current host: ${currentConfig?.host}`);
+            console.log(`[TEST] Current port: ${currentConfig?.port}`);
+            console.log(`[TEST] Current HTTPS: ${currentConfig?.enableHTTPS}`);
+        } else {
+            console.log('[TEST] ❌ getCurrentServerConfig not available');
+        }
+        
+        console.log('\n[TEST] Raw config.json file:');
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const configPath = path.join(__dirname, '../config.json');
+            const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            console.log(`[TEST] File server.host: ${rawConfig.server?.host}`);
+            console.log(`[TEST] File database.host: ${rawConfig.database?.host}`);
+        } catch (error) {
+            console.log(`[TEST] ❌ Error reading config.json: ${error.message}`);
+        }
+        
+        console.log('\n[TEST] 💡 Host should be 0.0.0.0 for server binding');
+        console.log('[TEST] 💡 Database host (207.180.235.41) should be separate');
     }
 
     makeHttpRequest(options) {

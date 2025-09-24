@@ -43,11 +43,19 @@ class ConfigManager {
                 throw new Error('Missing SSL configuration section');
             }
             
-            // Update server config met defaults voor ontbrekende velden
+            // Update server config met defaults voor ontbrekende velden en validatie
+            let serverHost = this.config.server.host || '0.0.0.0';
+            
+            // Prevent using database IP as server host
+            if (serverHost === '207.180.235.41') {
+                console.warn('[CONFIG] ⚠️ Database IP detected as server host, correcting to 0.0.0.0');
+                serverHost = '0.0.0.0';
+            }
+            
             this.serverConfig = {
                 port: this.config.server.port || 8000,
                 httpsPort: this.config.server.httpsPort || 8443,
-                host: this.config.server.host || '0.0.0.0',
+                host: serverHost,
                 apiPrefix: this.config.server.apiPrefix || '/api/v1',
                 enableHTTPS: this.config.server.enableHTTPS || false,
                 sslKeyPath: path.join(__dirname, this.config.ssl.keyPath || '../ssl/private-key.pem'),

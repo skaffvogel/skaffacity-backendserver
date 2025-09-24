@@ -86,8 +86,18 @@ function getCurrentServerConfig() {
     if (global.configManager) {
         const currentConfig = global.configManager.getServerConfig();
         if (currentConfig) {
+            // Ensure host is valid for server binding
+            if (currentConfig.host === '207.180.235.41') {
+                console.warn('[CONFIG] ⚠️ Database host found in server config, correcting to 0.0.0.0');
+                currentConfig.host = '0.0.0.0';
+            }
             return currentConfig;
         }
+    }
+    // Ensure fallback config has correct host
+    if (serverConfig && serverConfig.host === '207.180.235.41') {
+        console.warn('[CONFIG] ⚠️ Correcting fallback host from database IP to 0.0.0.0');
+        serverConfig.host = '0.0.0.0';
     }
     return serverConfig; // Fallback naar startup config
 }
@@ -352,38 +362,41 @@ const startServer = async () => {
     
     // Server starten
     
-    if (serverConfig.enableHTTPS) {
+    // Gebruik altijd de huidige configuratie
+    const currentServerConfig = getCurrentServerConfig();
+    
+    if (currentServerConfig.enableHTTPS) {
       console.log('[MODULE] HTTPS server starten...');
       
       // Controleer of SSL certificaten bestaan
-      if (!fs.existsSync(serverConfig.sslKeyPath) || !fs.existsSync(serverConfig.sslCertPath)) {
+      if (!fs.existsSync(currentServerConfig.sslKeyPath) || !fs.existsSync(currentServerConfig.sslCertPath)) {
         console.error('[MODULE] ❌ SSL certificaten niet gevonden!');
-        console.error(`Key: ${serverConfig.sslKeyPath}`);
-        console.error(`Cert: ${serverConfig.sslCertPath}`);
+        console.error(`Key: ${currentServerConfig.sslKeyPath}`);
+        console.error(`Cert: ${currentServerConfig.sslCertPath}`);
         console.error('Genereer eerst SSL certificaten met: node generate-cert.js');
         process.exit(1);
       }
       
       // Laad SSL certificaten
       const sslOptions = {
-        key: fs.readFileSync(serverConfig.sslKeyPath),
-        cert: fs.readFileSync(serverConfig.sslCertPath)
+        key: fs.readFileSync(currentServerConfig.sslKeyPath),
+        cert: fs.readFileSync(currentServerConfig.sslCertPath)
       };
       
       // Start HTTPS server
       const httpsServer = https.createServer(sslOptions, app);
-      httpsServer.listen(serverConfig.httpsPort, serverConfig.host, () => {
+      httpsServer.listen(currentServerConfig.httpsPort, currentServerConfig.host, () => {
         console.log('[MODULE] ✅ HTTPS server gestart!');
       });
       
       // Start ook HTTP server voor redirects
       const httpApp = express();
       httpApp.use((req, res) => {
-        res.redirect(`https://${req.headers.host.split(':')[0]}:${serverConfig.httpsPort}${req.url}`);
+        res.redirect(`https://${req.headers.host.split(':')[0]}:${currentServerConfig.httpsPort}${req.url}`);
       });
       
       const httpServer = http.createServer(httpApp);
-      httpServer.listen(serverConfig.port, serverConfig.host, () => {
+      httpServer.listen(currentServerConfig.port, currentServerConfig.host, () => {
         console.log('[MODULE] ✅ HTTP redirect server gestart!');
         console.log(`
 ╔════════════════════════════════════════════════════════╗
@@ -393,9 +406,9 @@ const startServer = async () => {
 ║                                                        ║
 ╠════════════════════════════════════════════════════════╣
 ║                                                        ║
-║  HTTPS: https://${serverConfig.host}:${serverConfig.httpsPort}${serverConfig.apiPrefix}             ║
-║  Health: https://${serverConfig.host}:${serverConfig.httpsPort}${serverConfig.apiPrefix}/health      ║
-║  HTTP Redirect: http://${serverConfig.host}:${serverConfig.port} → HTTPS         ║
+║  HTTPS: https://${currentServerConfig.host}:${currentServerConfig.httpsPort}${currentServerConfig.apiPrefix}             ║
+║  Health: https://${currentServerConfig.host}:${currentServerConfig.httpsPort}${currentServerConfig.apiPrefix}/health      ║
+║  HTTP Redirect: http://${currentServerConfig.host}:${currentServerConfig.port} → HTTPS         ║
 ║                                                        ║
 ║  Omgeving: ${process.env.NODE_ENV || 'development'}                               ║
 ║  Database: MySQL - ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}   ║
@@ -408,7 +421,7 @@ const startServer = async () => {
       });
     } else {
       console.log('[MODULE] HTTP server starten...');
-      app.listen(serverConfig.port, serverConfig.host, () => {
+      app.listen(currentServerConfig.port, currentServerConfig.host, () => {
         console.log('[MODULE] ✅ HTTP server gestart!');
         console.log(`
 ╔════════════════════════════════════════════════════════╗
@@ -418,8 +431,8 @@ const startServer = async () => {
 ║                                                        ║
 ╠════════════════════════════════════════════════════════╣
 ║                                                        ║
-║  Server: http://${serverConfig.host}:${serverConfig.port}${serverConfig.apiPrefix}                      ║
-║  Health: http://${serverConfig.host}:${serverConfig.port}${serverConfig.apiPrefix}/health             ║
+║  Server: http://${currentServerConfig.host}:${currentServerConfig.port}${currentServerConfig.apiPrefix}                      ║
+║  Health: http://${currentServerConfig.host}:${currentServerConfig.port}${currentServerConfig.apiPrefix}/health             ║
 ║                                                        ║
 ║  Omgeving: ${process.env.NODE_ENV || 'development'}                               ║
 ║  Database: MySQL - ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}   ║
