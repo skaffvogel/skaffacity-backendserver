@@ -20,7 +20,7 @@ class GameServerManager {
             apiKey: gameserverConfig?.pterodactyl?.apiKey || process.env.PTERODACTYL_API_KEY || '',
             adminApiKey: gameserverConfig?.pterodactyl?.adminApiKey || process.env.PTERODACTYL_ADMIN_API_KEY || '',
             clientApiKey: gameserverConfig?.pterodactyl?.clientApiKey || process.env.PTERODACTYL_CLIENT_API_KEY || '',
-            gameServerNestId: gameserverConfig?.pterodactyl?.nestId || process.env.GAME_SERVER_NEST_ID || '1',
+            gameServerNestId: gameserverConfig?.pterodactyl?.nestId || process.env.GAME_SERVER_NEST_ID || '5',
             gameServerEggId: gameserverConfig?.pterodactyl?.eggId || process.env.GAME_SERVER_EGG_ID || '20'
         };
         
@@ -171,7 +171,7 @@ class GameServerManager {
             
             // Check if allocation exists for this port, if not create it
             console.log(`[GameServerManager] 🔍 Checking allocation for port ${nextPort}...`);
-            const allocation = await this.ensureAllocationExists(nextPort);
+            let allocation = await this.ensureAllocationExists(nextPort);
             
             console.log(`[GameServerManager] ✅ Using allocation ID: ${allocation.id} (${allocation.ip}:${allocation.port})`);
 
