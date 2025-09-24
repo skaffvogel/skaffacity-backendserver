@@ -48,6 +48,14 @@ class GameServerCommand {
             case 'createallocations':
                 await this.createPortAllocations(args[1], args[2]);
                 break;
+            case 'dboff':
+            case 'disabledb':
+                await this.disableDatabase();
+                break;
+            case 'dbon':
+            case 'enabledb':
+                await this.enableDatabase();
+                break;
             default:
                 this.showHelp();
                 break;
@@ -559,6 +567,8 @@ class GameServerCommand {
         console.log('║  gameserver scale <count>      - Scale to specific count ║');
         console.log('║  gameserver createallocations <start> <end>             ║');
         console.log('║                                - Create port allocations ║');
+        console.log('║  gameserver dboff              - Disable database        ║');
+        console.log('║  gameserver dbon               - Enable database         ║');
         console.log('║                                                          ║');
         console.log('║  🎮 SkaffaCity Unity Server Features:                   ║');
         console.log('║    • 🔄 Auto-update via Git (skaffacity-serverbuild)    ║');
@@ -567,6 +577,48 @@ class GameServerCommand {
         console.log('║    • 🌐 UDP networking + Master server (207.180.235.41) ║');
         console.log('║    • 👥 Up to 50 players, 30Hz tick rate, EU-West      ║');
         console.log('╚══════════════════════════════════════════════════════════╝\n');
+    }
+
+    async disableDatabase() {
+        console.log('[GAMESERVER] 🛑 Disabling database connection...');
+        
+        if (global.configManager) {
+            try {
+                const dbConfig = global.configManager.getConfig('database') || {};
+                dbConfig.enabled = false;
+                global.configManager.saveConfig('database', dbConfig);
+                console.log('[GAMESERVER] ✅ Database disabled in configuration');
+                console.log('[GAMESERVER] 💡 Server will start without database functionality');
+                console.log('[GAMESERVER] 🔄 Restart server to apply changes');
+            } catch (error) {
+                console.error('[GAMESERVER] ❌ Failed to disable database:', error.message);
+            }
+        } else {
+            console.log('[GAMESERVER] ⚠️  ConfigManager not available, setting environment variable');
+            process.env.DB_ENABLED = 'false';
+            console.log('[GAMESERVER] ✅ Database disabled via environment variable');
+        }
+    }
+    
+    async enableDatabase() {
+        console.log('[GAMESERVER] 🟢 Enabling database connection...');
+        
+        if (global.configManager) {
+            try {
+                const dbConfig = global.configManager.getConfig('database') || {};
+                dbConfig.enabled = true;
+                global.configManager.saveConfig('database', dbConfig);
+                console.log('[GAMESERVER] ✅ Database enabled in configuration');
+                console.log('[GAMESERVER] 💡 Make sure database credentials are set');
+                console.log('[GAMESERVER] 🔄 Restart server to apply changes');
+            } catch (error) {
+                console.error('[GAMESERVER] ❌ Failed to enable database:', error.message);
+            }
+        } else {
+            console.log('[GAMESERVER] ⚠️  ConfigManager not available, removing environment variable');
+            delete process.env.DB_ENABLED;
+            console.log('[GAMESERVER] ✅ Database enabled via environment variable');
+        }
     }
 
     loadConfig() {

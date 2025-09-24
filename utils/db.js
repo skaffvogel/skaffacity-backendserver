@@ -13,17 +13,28 @@ let sequelize;
  * Get database config from new modular system
  */
 function getDatabaseConfig() {
+  // Priority: Environment Variables > Live Config > Fallback defaults
+  let config = {};
+  
+  // First try live config from ConfigManager
   if (global.configManager && global.configManager.getConfig) {
-    return global.configManager.getConfig('database');
+    try {
+      config = global.configManager.getConfig('database') || {};
+    } catch (error) {
+      console.warn('[DATABASE] Could not load config from ConfigManager:', error.message);
+      config = {};
+    }
   }
   
-  // Fallback to environment variables
+  // Override with environment variables if set (higher priority)
   return {
-    host: process.env.DB_HOST || '207.180.235.41',
-    port: parseInt(process.env.DB_PORT) || 3306,
-    database: process.env.DB_NAME || 's14_skaffacity',
-    username: process.env.DB_USER || 'u14_Sz62GJBI8E',
-    password: process.env.DB_PASSWORD || ''
+    host: process.env.DB_HOST || config.host || '207.180.235.41',
+    port: parseInt(process.env.DB_PORT) || config.port || 3306,
+    database: process.env.DB_NAME || config.database || 's14_skaffacity', 
+    username: process.env.DB_USER || config.username || 'u14_Sz62GJBI8E',
+    password: process.env.DB_PASSWORD || config.password || '',
+    // Add option to disable database entirely
+    enabled: process.env.DB_ENABLED !== 'false' && config.enabled !== false
   };
 }
 
@@ -33,11 +44,25 @@ function getDatabaseConfig() {
 const initDatabase = async () => {
   // Database configuratie uit modular config system
   const dbConfig = getDatabaseConfig();
+  
+  // Check if database is disabled
+  if (dbConfig.enabled === false) {
+    console.log('[DATABASE] Database is disabled in configuration');
+    return false;
+  }
+  
   const dbHost = dbConfig.host;
   const dbPort = dbConfig.port;
   const dbName = dbConfig.database;
   const dbUser = dbConfig.username;
   const dbPassword = dbConfig.password;
+  
+  // Check for required database credentials
+  if (!dbPassword || dbPassword === '') {
+    console.warn('[DATABASE] No database password configured, skipping database connection');
+    console.warn('[DATABASE] Set DB_PASSWORD environment variable or use: config set database.password <password>');
+    return false;
+  }
   
   try {
     console.log(`Database verbinding maken naar ${dbHost}:${dbPort}/${dbName} als gebruiker ${dbUser}`);
@@ -88,7 +113,10 @@ const initDatabase = async () => {
     return true;
   } catch (error) {
     console.error(`Database fout: ${error.message}`);
-    throw error;
+    console.warn('Database connectie mislukt, server zal starten zonder database functionaliteit');
+    pool = null;
+    sequelize = null;
+    return false;
   }
 };
 
@@ -100,7 +128,8 @@ const initDatabase = async () => {
  */
 const query = async (sql, params = []) => {
   if (!pool) {
-    throw new Error('Database pool is niet geïnitialiseerd');
+    console.warn('[DATABASE] Geen database connectie beschikbaar voor query');
+    return [];
   }
   
   try {
@@ -108,7 +137,7 @@ const query = async (sql, params = []) => {
     return results;
   } catch (error) {
     console.error(`Query fout: ${error.message}`);
-    throw error;
+    return [];
   }
 };
 
@@ -370,9 +399,15 @@ const closeDatabase = async () => {
  */
 const getConnection = async () => {
   if (!pool) {
-    throw new Error('Database niet geïnitialiseerd');
+    console.warn('[DATABASE] Geen database connectie beschikbaar');
+    return null;
   }
-  return await pool.getConnection();
+  try {
+    return await pool.getConnection();
+  } catch (error) {
+    console.error('[DATABASE] Fout bij ophalen connectie:', error.message);
+    return null;
+  }
 };
 
 /**

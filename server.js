@@ -435,16 +435,22 @@ const startServer = async () => {
   try {
     console.log('[MODULE] Server startup proces starten...');
     
-    // Database initialiseren
+    // Database initialiseren (optioneel)
     console.log('[MODULE] Database initialisatie starten...');
-    const dbConnected = await db.initDatabase();
-    
-    if (!dbConnected) {
-      console.error('[MODULE] ❌ Database initialisatie mislukt!');
-      console.error('Server start afgebroken vanwege database connectiefout');
-      process.exit(1);
+    try {
+      const dbConnected = await db.initDatabase();
+      if (dbConnected) {
+        console.log('[MODULE] ✅ Database initialisatie voltooid!');
+        global.databaseAvailable = true;
+      } else {
+        console.warn('[MODULE] ⚠️  Database niet beschikbaar, server start zonder database functionaliteit');
+        global.databaseAvailable = false;
+      }
+    } catch (error) {
+      console.warn('[MODULE] ⚠️  Database connectie mislukt:', error.message);
+      console.warn('[MODULE] ⚠️  Server start zonder database functionaliteit');
+      global.databaseAvailable = false;
     }
-    console.log('[MODULE] ✅ Database initialisatie voltooid!');
     
     // Server starten
     
