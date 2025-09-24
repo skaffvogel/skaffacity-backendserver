@@ -49,7 +49,7 @@ class GameServerCommand {
         try {
             const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
-            if (config.gameServer.pterodactyl.enabled) {
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
                 console.log('[GAMESERVER] 🦕 Using Pterodactyl integration');
                 await this.listPterodactylServers();
             } else {
@@ -108,7 +108,7 @@ class GameServerCommand {
         try {
             const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
-            if (config.gameServer.pterodactyl.enabled) {
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
                 const GameServerManager = require('../managers/GameServerManager');
                 const manager = new GameServerManager();
                 
@@ -140,7 +140,7 @@ class GameServerCommand {
         try {
             const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
-            if (config.gameServer.pterodactyl.enabled) {
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
                 const GameServerManager = require('../managers/GameServerManager');
                 const manager = new GameServerManager();
                 
@@ -163,18 +163,21 @@ class GameServerCommand {
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                 Game Server Status                       ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
-        console.log(`║  Max Servers:     ${config.gameServer.maxServers.toString().padEnd(36)} ║`);
-        console.log(`║  Auto Scale:      ${config.gameServer.autoScale.toString().padEnd(36)} ║`);
-        console.log(`║  Pterodactyl:     ${config.gameServer.pterodactyl.enabled.toString().padEnd(36)} ║`);
+        console.log(`║  Max Servers:     ${((config.gameServer?.maxServers) || (config.maxServers) || 'N/A').toString().padEnd(36)} ║`);
+        console.log(`║  Auto Scale:      ${((config.gameServer?.autoScale) || (config.autoScale) || 'N/A').toString().padEnd(36)} ║`);
+        console.log(`║  Pterodactyl:     ${((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled) || false).toString().padEnd(36)} ║`);
         
-        if (config.gameServer.pterodactyl.enabled) {
-            const apiConfigured = config.gameServer.pterodactyl.apiUrl && config.gameServer.pterodactyl.apiKey;
+        const pterodactylEnabled = (config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled);
+        if (pterodactylEnabled) {
+            const apiUrl = (config.gameServer?.pterodactyl?.apiUrl) || (config.pterodactyl?.apiUrl);
+            const apiKey = (config.gameServer?.pterodactyl?.apiKey) || (config.pterodactyl?.apiKey);
+            const apiConfigured = apiUrl && apiKey;
             console.log(`║  API Configured:  ${apiConfigured.toString().padEnd(36)} ║`);
         }
         
         console.log('╚══════════════════════════════════════════════════════════╝\n');
         
-        if (config.gameServer.pterodactyl.enabled) {
+        if (pterodactylEnabled) {
             await this.listServers();
         }
     }
@@ -262,7 +265,7 @@ class GameServerCommand {
         try {
             const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
-            if (config.gameServer.pterodactyl.enabled) {
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
                 const GameServerManager = require('../managers/GameServerManager');
                 const manager = new GameServerManager();
                 
