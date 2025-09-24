@@ -103,7 +103,7 @@ class SSLCommand {
 
     async enableHTTPS() {
         if (global.configManager) {
-            global.configManager.set('server.enableHTTPS', true);
+            global.configManager.updateConfig('server', 'enableHTTPS', true);
         } else {
             const config = this.loadConfig();
             config.server.enableHTTPS = true;
@@ -118,7 +118,7 @@ class SSLCommand {
 
     async disableHTTPS() {
         if (global.configManager) {
-            global.configManager.set('server.enableHTTPS', false);
+            global.configManager.updateConfig('server', 'enableHTTPS', false);
         } else {
             const config = this.loadConfig();
             config.server.enableHTTPS = false;

@@ -45,7 +45,7 @@ class SystemCommand {
     async showSystemInfo() {
         console.log('[SYSTEM] 🖥️  Gathering system information...');
         
-        const config = this.loadConfig();
+        const config = global.configManager ? global.configManager.getConfig('server') : this.loadConfig();
         
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                   System Information                     ║');
@@ -104,7 +104,11 @@ class SystemCommand {
 
         // Check config file
         try {
-            this.loadConfig();
+            if (global.configManager) {
+                global.configManager.getConfig('server');
+            } else {
+                this.loadConfig();
+            }
             health.checks.config = {
                 status: 'ok',
                 details: 'Valid JSON'

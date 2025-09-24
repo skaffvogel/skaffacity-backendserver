@@ -47,7 +47,7 @@ class GameServerCommand {
         console.log('[GAMESERVER] 🎮 Listing game server instances...');
         
         try {
-            const config = this.loadConfig();
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
             if (config.gameServer.pterodactyl.enabled) {
                 console.log('[GAMESERVER] 🦕 Using Pterodactyl integration');
@@ -106,7 +106,7 @@ class GameServerCommand {
         console.log(`[GAMESERVER] 🚀 Starting game server ${serverId || 'new'}...`);
         
         try {
-            const config = this.loadConfig();
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
             if (config.gameServer.pterodactyl.enabled) {
                 const GameServerManager = require('../managers/GameServerManager');
@@ -138,7 +138,7 @@ class GameServerCommand {
         console.log(`[GAMESERVER] 🛑 Stopping game server ${serverId}...`);
         
         try {
-            const config = this.loadConfig();
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
             if (config.gameServer.pterodactyl.enabled) {
                 const GameServerManager = require('../managers/GameServerManager');
@@ -158,7 +158,7 @@ class GameServerCommand {
     async showStatus() {
         console.log('[GAMESERVER] 📊 Game server status overview...');
         
-        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
+        const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
         
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                 Game Server Status                       ║');
@@ -260,7 +260,7 @@ class GameServerCommand {
         console.log(`[GAMESERVER] ⚖️  Scaling to ${targetCount} servers...`);
         
         try {
-            const config = this.loadConfig();
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
             
             if (config.gameServer.pterodactyl.enabled) {
                 const GameServerManager = require('../managers/GameServerManager');
