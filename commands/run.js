@@ -32,21 +32,21 @@ class RunCommand {
 
     executeCommand(command) {
         return new Promise((resolve, reject) => {
-            const process = exec(command, {
+            const childProcess = exec(command, {
                 cwd: path.join(__dirname, '../../'),
                 env: { ...process.env },
                 maxBuffer: 1024 * 1024 * 10 // 10MB buffer
             });
 
-            process.stdout.on('data', (data) => {
+            childProcess.stdout.on('data', (data) => {
                 process.stdout.write(data);
             });
 
-            process.stderr.on('data', (data) => {
+            childProcess.stderr.on('data', (data) => {
                 process.stderr.write(data);
             });
 
-            process.on('close', (code) => {
+            childProcess.on('close', (code) => {
                 console.log('[RUN] ──────────────────────────────────────────');
                 if (code === 0) {
                     console.log(`[RUN] ✅ Command completed successfully (exit code: ${code})`);
@@ -57,7 +57,7 @@ class RunCommand {
                 }
             });
 
-            process.on('error', (error) => {
+            childProcess.on('error', (error) => {
                 console.log('[RUN] ──────────────────────────────────────────');
                 console.error(`[RUN] ❌ Process error: ${error.message}`);
                 reject(error);
