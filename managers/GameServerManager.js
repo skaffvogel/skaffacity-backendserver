@@ -190,6 +190,9 @@ class GameServerManager {
                     allocations: 1,
                     backups: 0
                 },
+                allocation: {
+                    default: serverPort
+                },
                 environment: {
                     ...(serverTemplate.environment || {}),
                     GAME_SERVER_ID: serverId,
@@ -243,9 +246,9 @@ class GameServerManager {
                 
                 if (error.response.data && error.response.data.errors) {
                     console.error('[GameServerManager] 🔍 Validation Errors:');
-                    for (const field in error.response.data.errors) {
-                        console.error(`  - ${field}: ${error.response.data.errors[field].join(', ')}`);
-                    }
+                    error.response.data.errors.forEach((err, index) => {
+                        console.error(`  ${index + 1}. ${err.detail} (Field: ${err.meta?.source_field || 'unknown'})`);
+                    });
                 }
             }
             
