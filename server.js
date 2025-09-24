@@ -11,20 +11,12 @@ const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
 
-// Config en database importeren (met fallback)
-let config;
-try {
-    config = require('./config/config.json');
-} catch (error) {
-    console.warn('Config file not found, using environment variables');
-    config = {
-        server: {
-            port: process.env.PORT || 8000,
-            host: process.env.HOST || '0.0.0.0',
-            apiPrefix: '/api/v1'
-        }
-    };
-}
+// Server configuratie via environment variables
+const serverConfig = {
+    port: process.env.PORT || 8000,
+    host: process.env.HOST || '0.0.0.0',
+    apiPrefix: '/api/v1'
+};
 
 const db = require('./utils/db');
 let models;
@@ -49,8 +41,8 @@ const { authenticateToken } = require('./middleware/auth');
 
 // Express app initialiseren
 const app = express();
-const PORT = process.env.PORT || config.server.port;
-const HOST = process.env.HOST || config.server.host;
+const PORT = process.env.PORT || serverConfig.port;
+const HOST = process.env.HOST || serverConfig.host;
 
 // Logging configureren
 const logDirectory = path.join(__dirname, './logs');
@@ -61,16 +53,16 @@ const accessLogStream = fs.createWriteStream(
 );
 
 // Middleware
-app.use(cors(config.security.cors || { origin: '*' }));
-app.use(helmet(config.security.helmet || {}));
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: accessLogStream }));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: config.security.rateLimiting.windowMs,
-  max: config.security.rateLimiting.max,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -84,7 +76,7 @@ app.use((req, res, next) => {
 });
 
 // API routes
-const apiPrefix = config.server.apiPrefix || '/api/v1';
+const apiPrefix = serverConfig.apiPrefix;
 
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/player`, authenticateToken, playerRoutes);
@@ -99,7 +91,7 @@ app.get(`${apiPrefix}/health`, (req, res) => {
   res.status(200).json({
     status: 'UP',
     timestamp: new Date(),
-    serverName: config.game.serverName || 'SkaffaCity Server',
+    serverName: 'SkaffaCity Server',
     version: process.env.npm_package_version || '1.0.0'
   });
 });
@@ -147,8 +139,8 @@ const startServer = async () => {
 ║                                                        ║
 ║  Server draait op http://${HOST}:${PORT}${apiPrefix}        ║
 ║                                                        ║
-║  Omgeving: ${config.server.environment || 'development'}                               ║
-║  Database: ${config.database.type || 'MySQL'} - ${config.database.host}:${config.database.port}   ║
+║  Omgeving: ${process.env.NODE_ENV || 'development'}                               ║
+║  Database: MySQL - ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}   ║
 ║                                                        ║
 ╚════════════════════════════════════════════════════════╝
       `);

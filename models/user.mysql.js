@@ -6,12 +6,8 @@
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../utils/db');
-let config;
-try {
-    config = require('../config/config.json');
-} catch (error) {
-    config = { auth: { saltRounds: 10 } };
-}
+// Salt rounds configuratie via environment variable
+const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 10;
 
 class User {
   constructor(data = {}) {
@@ -40,7 +36,7 @@ class User {
    * @returns {Promise<string>} - Gehashed wachtwoord
    */
   static async hashPassword(password) {
-    return await bcrypt.hash(password, config.auth.saltRounds);
+    return await bcrypt.hash(password, SALT_ROUNDS);
   }
 
   /**

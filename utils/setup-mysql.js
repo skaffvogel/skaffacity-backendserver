@@ -9,13 +9,11 @@ const mysql = require('mysql2/promise');
 const prompts = require('prompts');
 const fs = require('fs');
 const path = require('path');
-const config = require('../config/config.json');
-
-// Instellingen voor de database
-const DB_NAME = config.database.name || 'skaffacity';
-const DB_USER = config.database.user || 'skaffacity';
-const DB_PASSWORD = config.database.password || 'skaffacity_password';
-const DB_HOST = config.database.host || 'localhost';
+// Database instellingen uit environment variables
+const DB_NAME = process.env.DB_NAME || 'skaffacity';
+const DB_USER = process.env.DB_USER || 'skaffa';
+const DB_PASSWORD = process.env.DB_PASSWORD || 'skaffacity_password';
+const DB_HOST = process.env.DB_HOST || 'localhost';
 
 /**
  * Hoofdfunctie voor het instellen van de database
