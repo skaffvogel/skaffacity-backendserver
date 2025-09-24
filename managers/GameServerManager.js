@@ -660,7 +660,7 @@ class GameServerManager {
             
             const createAllocationRequest = {
                 ip: '0.0.0.0', // Default IP, adjust if needed
-                port: port,
+                ports: [port.toString()], // Pterodactyl expects an array of port strings
                 assigned: false
             };
             
