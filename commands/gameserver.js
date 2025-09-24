@@ -44,6 +44,10 @@ class GameServerCommand {
             case 'createwithegg':
                 await this.createServerWithEgg(args[1]);
                 break;
+            case 'allocations':
+            case 'createallocations':
+                await this.createPortAllocations(args[1], args[2]);
+                break;
             default:
                 this.showHelp();
                 break;
@@ -422,7 +426,66 @@ class GameServerCommand {
             
             if (error.message.includes('allocation')) {
                 console.log(`[GAMESERVER] 🔧 Allocation issue - check Pterodactyl node allocations`);
+                console.log(`[GAMESERVER] 💡 Try: gameserver createallocations 7001 7020`);
             }
+        }
+    }
+
+    async createPortAllocations(startPort, endPort) {
+        const start = parseInt(startPort) || 7001;
+        const end = parseInt(endPort) || start + 19; // Default range of 20 ports
+        
+        console.log(`[GAMESERVER] 🔧 Creating port allocations from ${start} to ${end}...`);
+        
+        try {
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
+            
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
+                const GameServerManager = require('../managers/GameServerManager');
+                const manager = new GameServerManager();
+                
+                let created = 0;
+                let skipped = 0;
+                let failed = 0;
+                
+                for (let port = start; port <= end; port++) {
+                    try {
+                        console.log(`[GAMESERVER] 🔨 Creating allocation for port ${port}...`);
+                        
+                        // Check if allocation already exists
+                        const existingAllocation = await manager.ensureAllocationExists(port);
+                        
+                        if (existingAllocation) {
+                            if (existingAllocation.assigned) {
+                                console.log(`[GAMESERVER] ⚠️ Port ${port} allocation already assigned`);
+                                skipped++;
+                            } else {
+                                console.log(`[GAMESERVER] ✅ Port ${port} allocation already exists and available`);
+                                skipped++;
+                            }
+                        } else {
+                            created++;
+                        }
+                        
+                    } catch (error) {
+                        console.error(`[GAMESERVER] ❌ Failed to create allocation for port ${port}: ${error.message}`);
+                        failed++;
+                    }
+                }
+                
+                console.log(`\n[GAMESERVER] 📊 Allocation Summary:`);
+                console.log(`[GAMESERVER] ✅ Created: ${created}`);
+                console.log(`[GAMESERVER] ⚠️ Skipped: ${skipped}`);
+                console.log(`[GAMESERVER] ❌ Failed: ${failed}`);
+                console.log(`[GAMESERVER] 📋 Total processed: ${end - start + 1}`);
+                
+            } else {
+                console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
+                console.log('[GAMESERVER] 💡 Enable in config: config updateConfig gameserver pterodactyl.enabled true');
+            }
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to create allocations:', error.message);
         }
     }
 
@@ -481,6 +544,8 @@ class GameServerCommand {
         console.log('║  gameserver config          - Show configuration        ║');
         console.log('║  gameserver pterodactyl     - Test Pterodactyl API      ║');
         console.log('║  gameserver scale <count>   - Scale to specific count   ║');
+        console.log('║  gameserver createallocations <start> <end>             ║');
+        console.log('║                               - Create port allocations ║');
         console.log('║                                                          ║');
         console.log('║  🎮 SkaffaCity Unity Servers include:                   ║');
         console.log('║    • Auto-update from GitHub (skaffacity-serverbuild)   ║');

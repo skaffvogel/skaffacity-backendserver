@@ -169,22 +169,22 @@ class GameServerManager {
             console.log('[GameServerManager] 🔍 Finding next available port...');
             const nextPort = await this.getNextAvailablePort();
             
-            // Check if allocation exists for this port, if not create it
-            console.log(`[GameServerManager] 🔍 Checking allocation for port ${nextPort}...`);
+            // Get allocation for the selected port
+            console.log(`[GameServerManager] 🔍 Getting allocation for port ${nextPort}...`);
             let allocation = await this.ensureAllocationExists(nextPort);
             
-            console.log(`[GameServerManager] ✅ Using allocation ID: ${allocation.id} (${allocation.ip}:${allocation.port})`);
-
-            // Verify allocation is available for assignment, find alternative if needed
-            try {
-                await this.verifyAllocationAvailable(allocation.id);
-            } catch (allocationError) {
-                console.log(`[GameServerManager] ⚠️ Allocation ${allocation.id} not available: ${allocationError.message}`);
-                console.log(`[GameServerManager] 🔄 Finding alternative allocation...`);
-                
-                // Find next available unassigned allocation
+            // If the port allocation is already assigned, the getNextAvailablePort should have found a different one
+            if (allocation.assigned) {
+                console.log(`[GameServerManager] ⚠️ Port ${nextPort} allocation is already assigned, this shouldn't happen`);
+                console.log(`[GameServerManager] 🔄 Finding any available allocation as fallback...`);
                 allocation = await this.findAvailableAllocation();
-                console.log(`[GameServerManager] ✅ Using alternative allocation ID: ${allocation.id} (${allocation.ip}:${allocation.port})`);
+            }
+            
+            console.log(`[GameServerManager] ✅ Using allocation ID: ${allocation.id} (${allocation.ip}:${allocation.port})`);
+            
+            // Double-check allocation is really available
+            if (allocation.assigned) {
+                throw new Error(`Allocation ${allocation.id} is already assigned - no available allocations found`);
             }
 
             // Get configuration from modular config or use override
@@ -728,36 +728,68 @@ class GameServerManager {
      */
     async getNextAvailablePort() {
         try {
-            // Get all existing servers from Pterodactyl
-            const existingServers = await this.listServers();
-            const usedPorts = new Set();
+            console.log(`[GameServerManager] 🔍 Looking for available port starting from ${this.serverConfig.serverStartPort}...`);
             
-            // Collect all used ports
-            for (const server of existingServers) {
-                if (server.attributes && server.attributes.relationships && server.attributes.relationships.allocations) {
-                    const allocations = server.attributes.relationships.allocations.data || [];
-                    for (const alloc of allocations) {
-                        if (alloc.attributes && alloc.attributes.port) {
-                            usedPorts.add(alloc.attributes.port);
-                        }
+            // Get all allocations to see which ports are assigned
+            const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
+            const allocationsResponse = await axios.get(`${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const assignedPorts = new Set();
+            const availablePorts = new Map(); // port -> allocation info
+            
+            if (allocationsResponse.data && allocationsResponse.data.data) {
+                for (const alloc of allocationsResponse.data.data) {
+                    const port = alloc.attributes.port;
+                    
+                    if (alloc.attributes.assigned) {
+                        assignedPorts.add(port);
+                    } else {
+                        // Store available allocation info
+                        availablePorts.set(port, {
+                            id: alloc.attributes.id,
+                            port: port,
+                            ip: alloc.attributes.ip
+                        });
                     }
                 }
             }
             
-            // Find next available port starting from serverStartPort
-            let nextPort = this.serverConfig.serverStartPort;
-            while (usedPorts.has(nextPort)) {
-                nextPort++;
+            console.log(`[GameServerManager] 📊 Assigned ports: [${Array.from(assignedPorts).sort().join(', ') || 'none'}]`);
+            console.log(`[GameServerManager] 📊 Available ports: [${Array.from(availablePorts.keys()).sort().join(', ') || 'none'}]`);
+            
+            // Find next available port in our preferred range (7001+)
+            let targetPort = this.serverConfig.serverStartPort;
+            const maxSearchRange = 100; // Search up to 100 ports ahead
+            
+            for (let i = 0; i < maxSearchRange; i++) {
+                const candidatePort = targetPort + i;
+                
+                // Check if this port has an available allocation
+                if (availablePorts.has(candidatePort)) {
+                    console.log(`[GameServerManager] 🎯 Found preferred port in range: ${candidatePort}`);
+                    return candidatePort;
+                }
             }
             
-            console.log(`[GameServerManager] 📊 Used ports: [${Array.from(usedPorts).sort().join(', ')}]`);
-            console.log(`[GameServerManager] 🎯 Next available port: ${nextPort}`);
+            // If no port in preferred range, use any available port
+            const anyAvailablePort = Array.from(availablePorts.keys()).sort((a, b) => a - b)[0];
+            if (anyAvailablePort) {
+                console.log(`[GameServerManager] 🎯 Using any available port: ${anyAvailablePort}`);
+                return anyAvailablePort;
+            }
             
-            return nextPort;
+            // No available allocations found
+            throw new Error(`No available allocations found. Create more port allocations in Pterodactyl Panel (range ${this.serverConfig.serverStartPort}-${this.serverConfig.serverStartPort + maxSearchRange})`);
+            
         } catch (error) {
-            console.warn('[GameServerManager] ⚠️ Could not get existing servers, using default port logic');
-            // Fallback: use local servers count + start port
-            return this.serverConfig.serverStartPort + this.servers.size;
+            console.warn(`[GameServerManager] ⚠️ Error finding available port: ${error.message}`);
+            // Fallback: use server start port (may fail if allocation doesn't exist)
+            return this.serverConfig.serverStartPort;
         }
     }
 
@@ -769,7 +801,7 @@ class GameServerManager {
         
         try {
             // First, get all allocations to see if this port exists
-            console.log(`[GameServerManager] 🔍 Checking if allocation exists for port ${port}...`);
+            console.log(`[GameServerManager] 🔍 Ensuring allocation exists for port ${port}...`);
             
             const allocationsResponse = await axios.get(`${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`, {
                 headers: {
@@ -785,11 +817,13 @@ class GameServerManager {
                 );
                 
                 if (existingAllocation) {
-                    console.log(`[GameServerManager] ✅ Allocation already exists for port ${port}`);
+                    const allocationStatus = existingAllocation.attributes.assigned ? 'assigned' : 'available';
+                    console.log(`[GameServerManager] ✅ Allocation exists for port ${port} (${allocationStatus})`);
                     return {
                         id: existingAllocation.attributes.id,
                         port: existingAllocation.attributes.port,
-                        ip: existingAllocation.attributes.ip
+                        ip: existingAllocation.attributes.ip,
+                        assigned: existingAllocation.attributes.assigned
                     };
                 }
             }
