@@ -16,16 +16,26 @@ const { v4: uuidv4 } = require('uuid');
 const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
+const http = require('http');
 console.log('[MODULE] Core modules geladen!');
 
 // Server configuratie via environment variables
 console.log('[MODULE] Server configuratie laden...');
 const serverConfig = {
     port: process.env.PORT || 8000,
+    httpsPort: process.env.HTTPS_PORT || 8443,
     host: process.env.HOST || '0.0.0.0',
-    apiPrefix: '/api/v1'
+    apiPrefix: '/api/v1',
+    enableHTTPS: process.env.ENABLE_HTTPS === 'true' || false,
+    sslKeyPath: process.env.SSL_KEY_PATH || path.join(__dirname, '../ssl/private-key.pem'),
+    sslCertPath: process.env.SSL_CERT_PATH || path.join(__dirname, '../ssl/certificate.pem')
 };
-console.log('[MODULE] Server configuratie geladen!', serverConfig);
+console.log('[MODULE] Server configuratie geladen!', {
+    ...serverConfig,
+    sslKeyPath: serverConfig.enableHTTPS ? serverConfig.sslKeyPath : 'N/A',
+    sslCertPath: serverConfig.enableHTTPS ? serverConfig.sslCertPath : 'N/A'
+});
 
 console.log('[MODULE] Database connectie laden...');
 const db = require('./utils/db');
@@ -185,6 +195,14 @@ app.use(`${apiPrefix}/factions`, factionRoutes);
 console.log('[MODULE] Faction Wars endpoints registreren op', `${apiPrefix}/faction-wars`);
 app.use(`${apiPrefix}/faction-wars`, factionWarsRoutes);
 
+// Game Server Management routes
+console.log('[MODULE] Game Server routes laden...');
+const gameServerRoutes = require('./api/gameserver.routes');
+console.log('[MODULE] Game Server routes geladen!');
+
+console.log('[MODULE] Game Server endpoints registreren op', `${apiPrefix}/gameservers`);
+app.use(`${apiPrefix}/gameservers`, authenticateToken, gameServerRoutes);
+
 console.log('[MODULE] Alle API routes geregistreerd!');
 
 // Health check endpoint
@@ -241,28 +259,89 @@ const startServer = async () => {
     console.log('[MODULE] ✅ Database initialisatie voltooid!');
     
     // Server starten
-    console.log('[MODULE] HTTP server starten...');
-    app.listen(PORT, HOST, () => {
-      console.log('[MODULE] ✅ HTTP server gestart!');
-      console.log(`
+    const PORT = serverConfig.port;
+    const HTTPS_PORT = serverConfig.httpsPort;
+    const HOST = serverConfig.host;
+    
+    if (serverConfig.enableHTTPS) {
+      console.log('[MODULE] HTTPS server starten...');
+      
+      // Controleer of SSL certificaten bestaan
+      if (!fs.existsSync(serverConfig.sslKeyPath) || !fs.existsSync(serverConfig.sslCertPath)) {
+        console.error('[MODULE] ❌ SSL certificaten niet gevonden!');
+        console.error(`Key: ${serverConfig.sslKeyPath}`);
+        console.error(`Cert: ${serverConfig.sslCertPath}`);
+        console.error('Genereer eerst SSL certificaten met: node generate-cert.js');
+        process.exit(1);
+      }
+      
+      // Laad SSL certificaten
+      const sslOptions = {
+        key: fs.readFileSync(serverConfig.sslKeyPath),
+        cert: fs.readFileSync(serverConfig.sslCertPath)
+      };
+      
+      // Start HTTPS server
+      const httpsServer = https.createServer(sslOptions, app);
+      httpsServer.listen(HTTPS_PORT, HOST, () => {
+        console.log('[MODULE] ✅ HTTPS server gestart!');
+      });
+      
+      // Start ook HTTP server voor redirects
+      const httpApp = express();
+      httpApp.use((req, res) => {
+        res.redirect(`https://${req.headers.host.split(':')[0]}:${HTTPS_PORT}${req.url}`);
+      });
+      
+      const httpServer = http.createServer(httpApp);
+      httpServer.listen(PORT, HOST, () => {
+        console.log('[MODULE] ✅ HTTP redirect server gestart!');
+        console.log(`
 ╔════════════════════════════════════════════════════════╗
 ║                                                        ║
 ║             SkaffaCity Game Server                     ║
-║                    🚀 ONLINE! 🚀                       ║
+║                    � HTTPS SECURE! 🔐                 ║
 ║                                                        ║
 ╠════════════════════════════════════════════════════════╣
 ║                                                        ║
-║  Server: http://${HOST}:${PORT}${apiPrefix}                      ║
-║  Health: http://${HOST}:${PORT}${apiPrefix}/health             ║
+║  HTTPS: https://${HOST}:${HTTPS_PORT}${serverConfig.apiPrefix}             ║
+║  Health: https://${HOST}:${HTTPS_PORT}${serverConfig.apiPrefix}/health      ║
+║  HTTP Redirect: http://${HOST}:${PORT} → HTTPS         ║
 ║                                                        ║
 ║  Omgeving: ${process.env.NODE_ENV || 'development'}                               ║
 ║  Database: MySQL - ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}   ║
 ║                                                        ║
+║  🔐 SSL Certificaten geladen!                         ║
 ║  🎮 Alle modules succesvol geladen!                   ║
 ║                                                        ║
 ╚════════════════════════════════════════════════════════╝
-      `);
-    });
+        `);
+      });
+    } else {
+      console.log('[MODULE] HTTP server starten...');
+      app.listen(PORT, HOST, () => {
+        console.log('[MODULE] ✅ HTTP server gestart!');
+        console.log(`
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║             SkaffaCity Game Server                     ║
+║                    �🚀 ONLINE! 🚀                       ║
+║                                                        ║
+╠════════════════════════════════════════════════════════╣
+║                                                        ║
+║  Server: http://${HOST}:${PORT}${serverConfig.apiPrefix}                      ║
+║  Health: http://${HOST}:${PORT}${serverConfig.apiPrefix}/health             ║
+║                                                        ║
+║  Omgeving: ${process.env.NODE_ENV || 'development'}                               ║
+║  Database: MySQL - ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}   ║
+║                                                        ║
+║  ⚠️  HTTP modus - voor development only!               ║
+║  🎮 Alle modules succesvol geladen!                   ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+        `);
+      });
+    }
   } catch (error) {
     console.error(`Server start mislukt: ${error.message}`);
     process.exit(1);
