@@ -3,9 +3,14 @@
  */
 
 const { DataTypes } = require('sequelize');
-const { sequelize } = require('../config/database');
 
-const Player = sequelize.define('Player', {
+// Export factory function for sequelize instance
+module.exports = (sequelize) => {
+    if (!sequelize) {
+        throw new Error('Sequelize instance is required');
+    }
+    
+    const Player = sequelize.define('Player', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -67,9 +72,10 @@ const Player = sequelize.define('Player', {
         type: DataTypes.DATE,
         allowNull: true
     }
-}, {
-    tableName: 'players',
-    timestamps: false // We handle timestamps manually
-});
+    }, {
+        tableName: 'players',
+        timestamps: false // We handle timestamps manually
+    });
 
-module.exports = Player;
+    return Player;
+};

@@ -3,9 +3,21 @@
  */
 
 const { DataTypes } = require('sequelize');
-const { sequelize } = require('../config/database');
 
-const User = sequelize.define('User', {
+// Get sequelize instance from models/index.js to avoid circular dependency
+function getSequelize() {
+    const db = require('../utils/db');
+    return db.sequelize;
+}
+
+// We'll export a factory function instead
+module.exports = (sequelize) => {
+
+    if (!sequelize) {
+        throw new Error('Sequelize instance is required');
+    }
+    
+    const User = sequelize.define('User', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -37,9 +49,10 @@ const User = sequelize.define('User', {
         type: DataTypes.DATE,
         allowNull: true
     }
-}, {
-    tableName: 'users',
-    timestamps: false // We handle timestamps manually
-});
+    }, {
+        tableName: 'users',
+        timestamps: false // We handle timestamps manually
+    });
 
-module.exports = User;
+    return User;
+};

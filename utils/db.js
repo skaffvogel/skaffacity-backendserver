@@ -3,9 +3,11 @@
  */
 
 const mysql = require('mysql2/promise');
+const { Sequelize } = require('sequelize');
 
 // Database pool voor efficiënt verbindingsbeheer
 let pool;
+let sequelize;
 
 /**
  * Get database config from new modular system
@@ -52,9 +54,32 @@ const initDatabase = async () => {
       queueLimit: 0
     });
 
+    // Initialize Sequelize instance
+    sequelize = new Sequelize(dbName, dbUser, dbPassword, {
+      host: dbHost,
+      port: dbPort,
+      dialect: 'mysql',
+      logging: false, // Set to console.log to see SQL queries
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      }
+    });
+
     // Test de verbinding
     const connection = await pool.getConnection();
     console.log('Database verbinding succesvol');
+    
+    // Test Sequelize connection
+    try {
+      await sequelize.authenticate();
+      console.log('✅ [DATABASE] Sequelize connection established successfully');
+    } catch (seqError) {
+      console.warn('⚠️ [DATABASE] Sequelize connection failed:', seqError.message);
+      sequelize = null;
+    }
     
     // Voer database migraties uit
     await runMigrations();
@@ -375,5 +400,8 @@ module.exports = {
   query,
   getConnection,
   closeDatabase,
-  diagnoseConnection  // Diagnostische functie exporteren
+  diagnoseConnection,  // Diagnostische functie exporteren
+  get sequelize() {
+    return sequelize;
+  }
 };

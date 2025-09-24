@@ -26,17 +26,36 @@ function getDatabaseConfig() {
 const db = require('../utils/db');
 const sequelize = db.sequelize || null;
 
-// Sequelize models
-const User = require('./user.sequelize');
-const Player = require('./player.sequelize');
+let User = null;
+let Player = null;
 
-// Legacy models (fallback)
+// Initialize Sequelize models only if sequelize is available
+if (sequelize) {
+    try {
+        // Sequelize models (using factory functions)
+        const UserFactory = require('./user.sequelize');
+        const PlayerFactory = require('./player.sequelize');
+        
+        User = UserFactory(sequelize);
+        Player = PlayerFactory(sequelize);
+        
+        // Define associations
+        User.hasOne(Player, { foreignKey: 'user_id', as: 'player' });
+        Player.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+        
+        console.log('[MODELS] ✅ Sequelize models initialized');
+    } catch (error) {
+        console.error('[MODELS] ❌ Error initializing Sequelize models:', error.message);
+        User = null;
+        Player = null;
+    }
+} else {
+    console.warn('[MODELS] ⚠️ Sequelize not available, using legacy models only');
+}
+
+// Legacy models (fallback - always available)
 const FactionLegacy = require('./faction.mysql');
 const TransactionLegacy = require('./transaction.mysql');
-
-// Define associations
-User.hasOne(Player, { foreignKey: 'user_id', as: 'player' });
-Player.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 // Synchronisatie functie voor development
 const syncModels = async () => {
