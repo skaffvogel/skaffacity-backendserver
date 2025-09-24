@@ -665,8 +665,9 @@ class GameServerManager {
             if (allocationsResponse.data && allocationsResponse.data.data && allocationsResponse.data.data.length > 0) {
                 const firstAllocation = allocationsResponse.data.data[0].attributes;
                 nodeIP = firstAllocation.ip;
-                nodeAlias = firstAllocation.ip_alias;
+                nodeAlias = firstAllocation.alias || firstAllocation.ip_alias; // Try both property names
                 console.log(`[GameServerManager] 📡 Using existing node IP: ${nodeIP}${nodeAlias ? ` (alias: ${nodeAlias})` : ''}`);
+                console.log('[GameServerManager] 🔍 First allocation details:', JSON.stringify(firstAllocation, null, 2));
             }
             
             const createAllocationRequest = {
@@ -675,10 +676,12 @@ class GameServerManager {
                 assigned: false
             };
             
-            // Add alias if it exists on other allocations
+            // Add alias if it exists on other allocations (try both property names)
             if (nodeAlias) {
-                createAllocationRequest.ip_alias = nodeAlias;
+                createAllocationRequest.alias = nodeAlias;
             }
+            
+            console.log('[GameServerManager] 📋 Create allocation request:', JSON.stringify(createAllocationRequest, null, 2));
             
             const createResponse = await axios.post(
                 `${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`,
@@ -720,6 +723,7 @@ class GameServerManager {
             
         } catch (error) {
             console.error(`[GameServerManager] ❌ Error managing allocation for port ${port}:`, error.message);
+            console.error('[GameServerManager] 📊 Error stack:', error.stack);
             
             if (error.response) {
                 console.error('[GameServerManager] 📋 Allocation API Error:', JSON.stringify(error.response.data, null, 2));
