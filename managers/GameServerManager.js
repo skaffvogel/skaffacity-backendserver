@@ -207,7 +207,10 @@ class GameServerManager {
                     GAME_SERVER_ID: serverId,
                     GAME_SERVER_PORT: allocation.port.toString(),
                     MASTER_SERVER_URL: process.env.MASTER_SERVER_URL || 'https://localhost:8443',
-                    MAX_PLAYERS: this.serverConfig.maxPlayersPerServer.toString()
+                    MAX_PLAYERS: this.serverConfig.maxPlayersPerServer.toString(),
+                    // Required egg environment variables
+                    SERVER_JARFILE: 'server.jar', // Default jar file name
+                    BUILD_NUMBER: 'latest' // Default build number
                 }
             };
             
