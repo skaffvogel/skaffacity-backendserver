@@ -2,7 +2,29 @@
  * Models Index - Exporteert alle Sequelize models
  */
 
-const { sequelize } = require('../config/database');
+// Get database config from new modular system
+function getDatabaseConfig() {
+    if (global.configManager && global.configManager.getConfig) {
+        return global.configManager.getConfig('database');
+    }
+    
+    // Fallback to old system if available
+    try {
+        return require('../config/database');
+    } catch (error) {
+        console.warn('[MODELS] No database config available, using defaults');
+        return {
+            host: '207.180.235.41',
+            port: 3306,
+            database: 's14_skaffacity',
+            username: 'u14_Sz62GJBI8E'
+        };
+    }
+}
+
+// Import database connection
+const db = require('../utils/db');
+const sequelize = db.sequelize || null;
 
 // Sequelize models
 const User = require('./user.sequelize');

@@ -8,15 +8,34 @@ const mysql = require('mysql2/promise');
 let pool;
 
 /**
+ * Get database config from new modular system
+ */
+function getDatabaseConfig() {
+  if (global.configManager && global.configManager.getConfig) {
+    return global.configManager.getConfig('database');
+  }
+  
+  // Fallback to environment variables
+  return {
+    host: process.env.DB_HOST || '207.180.235.41',
+    port: parseInt(process.env.DB_PORT) || 3306,
+    database: process.env.DB_NAME || 's14_skaffacity',
+    username: process.env.DB_USER || 'u14_Sz62GJBI8E',
+    password: process.env.DB_PASSWORD || ''
+  };
+}
+
+/**
  * Initialiseer de database verbinding
  */
 const initDatabase = async () => {
-  // Database configuratie uit environment variables
-  const dbHost = process.env.DB_HOST || 'localhost';
-  const dbPort = parseInt(process.env.DB_PORT) || 3306;
-  const dbName = process.env.DB_NAME || 'skaffacity';
-  const dbUser = process.env.DB_USER || 'skaffa';
-  const dbPassword = process.env.DB_PASSWORD || '';
+  // Database configuratie uit modular config system
+  const dbConfig = getDatabaseConfig();
+  const dbHost = dbConfig.host;
+  const dbPort = dbConfig.port;
+  const dbName = dbConfig.database;
+  const dbUser = dbConfig.username;
+  const dbPassword = dbConfig.password;
   
   try {
     console.log(`Database verbinding maken naar ${dbHost}:${dbPort}/${dbName} als gebruiker ${dbUser}`);

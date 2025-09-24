@@ -30,8 +30,13 @@ console.log('[MODULE] Server configuratie laden...');
 let config, serverConfig, configManager;
 
 try {
-    configManager = require('./utils/config-manager');
-    config = configManager.getConfig();
+    const ConfigManager = require('./utils/config-manager');
+    configManager = new ConfigManager();
+    
+    // Maak ConfigManager globaal beschikbaar VOOR andere modules
+    global.configManager = configManager;
+    
+    config = configManager.getAllConfigs();
     serverConfig = configManager.getServerConfig();
     
     // Controleer of configuratie geldig is geladen
@@ -74,7 +79,25 @@ try {
             port: 3306,
             database: 's14_skaffacity',
             username: 'u14_Sz62GJBI8E'
+        },
+        ssl: {
+            keyPath: '../ssl/private-key.pem',
+            certPath: '../ssl/certificate.pem'
+        },
+        gameserver: {
+            maxServers: 5,
+            autoScale: true
         }
+    };
+    
+    // Create a minimal ConfigManager for fallback
+    global.configManager = {
+        getConfig: (type) => type ? config[type] : config,
+        getAllConfigs: () => config,
+        getServerConfig: () => serverConfig,
+        getDatabaseConfig: () => config.database,
+        getSSLConfig: () => config.ssl,
+        getGameServerConfig: () => config.gameserver
     };
     
     console.log('[ERROR] ✅ Fallback configuratie geladen');
