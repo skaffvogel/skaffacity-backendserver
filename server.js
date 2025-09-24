@@ -379,6 +379,18 @@ console.log('[MODULE] Config routes geladen!');
 console.log('[MODULE] Config endpoints registreren op', `${apiPrefix}/config`);
 app.use(`${apiPrefix}/config`, configRoutes);
 
+// Internal Server API routes (voor game server communicatie)
+console.log('[MODULE] Internal server routes laden...');
+let internalServerRoutes;
+try {
+    internalServerRoutes = require('./api/internal/servers.routes');
+    console.log('[MODULE] Internal server routes geladen!');
+    console.log('[MODULE] Internal server endpoints registreren op', `${apiPrefix}/internal/servers`);
+    app.use(`${apiPrefix}/internal/servers`, internalServerRoutes);
+} catch (error) {
+    console.warn('[MODULE] ⚠️ Internal server routes niet beschikbaar:', error.message);
+}
+
 console.log('[MODULE] Alle API routes geregistreerd!');
 
 // Health check endpoint

@@ -40,6 +40,10 @@ class GameServerCommand {
             case 'scale':
                 await this.scaleServers(args[1]);
                 break;
+            case 'createwith':
+            case 'createwithegg':
+                await this.createServerWithEgg(args[1]);
+                break;
             default:
                 this.showHelp();
                 break;
@@ -338,6 +342,10 @@ class GameServerCommand {
                 if (newServer.name) {
                     console.log(`[GAMESERVER] 📛 Server Name: ${newServer.name}`);
                 }
+                
+                // Show server details
+                await this.showServerDetails(newServer);
+                
             } else {
                 console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
                 console.log('[GAMESERVER] 💡 Enable in config: config updateConfig gameserver pterodactyl.enabled true');
@@ -348,18 +356,112 @@ class GameServerCommand {
         }
     }
 
+    async createServerWithEgg(eggId) {
+        const targetEggId = eggId || '20'; // Default to SkaffaCity Unity Server egg
+        console.log(`[GAMESERVER] 🏗️ Creating new game server with egg ID ${targetEggId}...`);
+        
+        try {
+            const config = global.configManager ? global.configManager.getConfig('gameserver') : this.loadConfig();
+            
+            if ((config.gameServer?.pterodactyl?.enabled) || (config.pterodactyl?.enabled)) {
+                const GameServerManager = require('../managers/GameServerManager');
+                const manager = new GameServerManager();
+                
+                // Temporarily override the egg ID
+                const originalEggId = manager.pterodactylConfig.gameServerEggId;
+                manager.pterodactylConfig.gameServerEggId = targetEggId;
+                
+                console.log(`[GAMESERVER] 🥚 Using egg ID: ${targetEggId} (SkaffaCity Unity Server)`);
+                console.log(`[GAMESERVER] 🐙 Creating with GitHub auto-update enabled`);
+                console.log(`[GAMESERVER] 📦 Repository: skaffvogel/skaffacity-serverbuild`);
+                
+                const newServer = await manager.createServer();
+                
+                // Restore original egg ID
+                manager.pterodactylConfig.gameServerEggId = originalEggId;
+                
+                console.log(`[GAMESERVER] ✅ SkaffaCity Unity Server created successfully!`);
+                console.log(`[GAMESERVER] 🆔 Server ID: ${newServer.id || newServer.uuid || 'Unknown'}`);
+                
+                if (newServer.name) {
+                    console.log(`[GAMESERVER] 📛 Server Name: ${newServer.name}`);
+                }
+                
+                // Show server details
+                await this.showServerDetails(newServer);
+                
+            } else {
+                console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
+                console.log('[GAMESERVER] 💡 Enable in config: config updateConfig gameserver pterodactyl.enabled true');
+            }
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to create server:', error.message);
+            console.log(`[GAMESERVER] 💡 Make sure egg ID ${targetEggId} exists in Pterodactyl Panel`);
+        }
+    }
+
+    async showServerDetails(server) {
+        if (!server) return;
+        
+        try {
+            console.log('\n╔══════════════════════════════════════════════════════════╗');
+            console.log('║                   Server Details                         ║');
+            console.log('╠══════════════════════════════════════════════════════════╣');
+            
+            if (server.attributes) {
+                const attrs = server.attributes;
+                console.log(`║  ID: ${(attrs.id || 'Unknown').toString().padEnd(50)} ║`);
+                console.log(`║  UUID: ${(attrs.uuid || 'Unknown').substring(0, 50).padEnd(50)} ║`);
+                console.log(`║  Name: ${(attrs.name || 'Unknown').substring(0, 48).padEnd(50)} ║`);
+                console.log(`║  Status: ${this.getStatusEmoji(attrs.status)} ${(attrs.status || 'Unknown').padEnd(45)} ║`);
+                
+                if (attrs.relationships?.allocations?.data?.[0]?.attributes) {
+                    const alloc = attrs.relationships.allocations.data[0].attributes;
+                    console.log(`║  IP:Port: ${alloc.ip}:${alloc.port}${''.padEnd(50 - `${alloc.ip}:${alloc.port}`.length)} ║`);
+                }
+                
+                console.log('║                                                          ║');
+                console.log('║  🎮 SkaffaCity Unity Server Features:                   ║');
+                console.log('║    • Auto-update from GitHub repository                 ║');
+                console.log('║    • UDP networking with master server integration      ║');
+                console.log('║    • Real-time multiplayer support                      ║');
+                console.log('║    • Pterodactyl panel management                       ║');
+            }
+            
+            console.log('╚══════════════════════════════════════════════════════════╝\n');
+            
+            if (server.attributes?.status === 'installing') {
+                console.log('[GAMESERVER] ⏳ Server is installing, this may take a few minutes...');
+                console.log('[GAMESERVER] 📋 The server will automatically download from GitHub');
+                console.log('[GAMESERVER] 🔗 Repository: https://github.com/skaffvogel/skaffacity-serverbuild');
+            }
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to show server details:', error.message);
+        }
+    }
+
     showHelp() {
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                Game Server Command Help                  ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
-        console.log('║  gameserver list          - List all game servers       ║');
-        console.log('║  gameserver create        - Create new game server      ║');
-        console.log('║  gameserver start [id]    - Start server (or create new)║');
-        console.log('║  gameserver stop <id>     - Stop specific server        ║');
-        console.log('║  gameserver status        - Show server status overview ║');
-        console.log('║  gameserver config        - Show configuration          ║');
-        console.log('║  gameserver pterodactyl   - Test Pterodactyl connection ║');
-        console.log('║  gameserver scale <count> - Scale to specific count     ║');
+        console.log('║  gameserver list            - List all game servers     ║');
+        console.log('║  gameserver create          - Create new game server    ║');
+        console.log('║  gameserver createwithegg   - Create SkaffaCity Unity   ║');
+        console.log('║                               Server (Egg ID 20)        ║');
+        console.log('║  gameserver start [id]      - Start server (or create)  ║');
+        console.log('║  gameserver stop <id>       - Stop specific server      ║');
+        console.log('║  gameserver status          - Show server status        ║');
+        console.log('║  gameserver config          - Show configuration        ║');
+        console.log('║  gameserver pterodactyl     - Test Pterodactyl API      ║');
+        console.log('║  gameserver scale <count>   - Scale to specific count   ║');
+        console.log('║                                                          ║');
+        console.log('║  🎮 SkaffaCity Unity Servers include:                   ║');
+        console.log('║    • Auto-update from GitHub (skaffacity-serverbuild)   ║');
+        console.log('║    • UDP networking with master server integration      ║');
+        console.log('║    • Real-time multiplayer support (up to 50 players)   ║');
+        console.log('║    • Pterodactyl panel management and monitoring        ║');
         console.log('╚══════════════════════════════════════════════════════════╝\n');
     }
 

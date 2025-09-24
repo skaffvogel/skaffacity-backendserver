@@ -17,7 +17,35 @@ const gameServerManager = new GameServerManager();
  */
 router.get('/', async (req, res) => {
     try {
-        const servers = gameServerManager.getAllServers();
+        // Get servers from internal registry first, fallback to Pterodactyl
+        let servers = [];
+        
+        try {
+            const internalServers = require('./internal/servers.routes');
+            const activeServers = internalServers.getActiveServers();
+            
+            if (activeServers && activeServers.length > 0) {
+                servers = activeServers.map(server => ({
+                    id: server.serverId,
+                    name: `SkaffaCity Server ${server.serverId}`,
+                    address: 'localhost', // Would be actual server IP
+                    port: server.serverPort,
+                    playerCount: server.currentPlayers,
+                    maxPlayers: server.maxPlayers,
+                    mapName: server.mapName,
+                    gameMode: server.gameMode,
+                    status: server.status,
+                    ping: 0 // Would be calculated
+                }));
+            }
+        } catch (error) {
+            console.warn('[GameServerAPI] Internal servers not available, using fallback');
+        }
+        
+        // Fallback to GameServerManager if no internal servers
+        if (servers.length === 0) {
+            servers = gameServerManager.getAllServers();
+        }
         
         res.json({
             status: 'success',
@@ -49,13 +77,50 @@ router.post('/join', async (req, res) => {
         const playerId = req.user.id; // Van JWT middleware
         const { preferredServerId } = req.body;
 
-        const queueResult = await gameServerManager.joinServerQueue(playerId, preferredServerId);
+        // Find available server from internal registry
+        let selectedServer = null;
         
+        try {
+            const internalServers = require('./internal/servers.routes');
+            
+            if (preferredServerId) {
+                // Try to find preferred server
+                const allServers = internalServers.getAllServers();
+                selectedServer = allServers.find(s => s.serverId === preferredServerId && 
+                    s.status === 'online' && s.currentPlayers < s.maxPlayers);
+            }
+            
+            // If no preferred server or preferred not available, find any available server
+            if (!selectedServer) {
+                selectedServer = internalServers.findAvailableServer();
+            }
+        } catch (error) {
+            console.warn('[GameServerAPI] Internal server registry not available, using GameServerManager');
+        }
+        
+        // Fallback to GameServerManager if no internal servers
+        if (!selectedServer) {
+            const queueResult = await gameServerManager.joinServerQueue(playerId, preferredServerId);
+            return res.json({
+                status: 'success',
+                message: 'Successfully joined server queue',
+                data: queueResult
+            });
+        }
+        
+        // Return selected server info for UDP connection
         res.json({
             status: 'success',
-            message: 'Successfully joined server queue',
-            data: queueResult
+            message: 'Server assigned successfully',
+            data: {
+                serverId: selectedServer.serverId,
+                serverAddress: 'localhost', // Would be actual server IP
+                serverPort: selectedServer.serverPort,
+                playerId: playerId,
+                queuePosition: 0 // Direct assignment
+            }
         });
+        
     } catch (error) {
         console.error('[GameServerAPI] Error joining server:', error.message);
         res.status(400).json({

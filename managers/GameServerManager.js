@@ -16,12 +16,12 @@ class GameServerManager {
         
         // Pterodactyl Panel Configuration - try modular config first, then env vars
         this.pterodactylConfig = {
-            apiUrl: gameserverConfig?.pterodactyl?.apiUrl || process.env.PTERODACTYL_API_URL || 'https://panel.yourdomain.com/api',
+            apiUrl: gameserverConfig?.pterodactyl?.apiUrl || process.env.PTERODACTYL_API_URL || 'https://panel.lvlagency.nl/api',
             apiKey: gameserverConfig?.pterodactyl?.apiKey || process.env.PTERODACTYL_API_KEY || '',
             adminApiKey: gameserverConfig?.pterodactyl?.adminApiKey || process.env.PTERODACTYL_ADMIN_API_KEY || '',
             clientApiKey: gameserverConfig?.pterodactyl?.clientApiKey || process.env.PTERODACTYL_CLIENT_API_KEY || '',
             gameServerNestId: gameserverConfig?.pterodactyl?.nestId || process.env.GAME_SERVER_NEST_ID || '1',
-            gameServerEggId: gameserverConfig?.pterodactyl?.eggId || process.env.GAME_SERVER_EGG_ID || '1'
+            gameServerEggId: gameserverConfig?.pterodactyl?.eggId || process.env.GAME_SERVER_EGG_ID || '20'
         };
         
         this.serverConfig = {
@@ -179,38 +179,64 @@ class GameServerManager {
             const gameserverConfig = global.configManager ? global.configManager.getConfig('gameserver') : null;
             const serverTemplate = gameserverConfig?.serverTemplate || {};
             
-            // Pterodactyl server creation request with proper structure
+            // Use admin API key for server creation
+            const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
+            if (!apiKey) {
+                throw new Error('Admin API key vereist voor server creation');
+            }
+            
+            // Complete Pterodactyl server creation request with ALL required fields
             const createRequest = {
                 name: serverName,
                 description: serverTemplate.description || 'SkaffaCity UDP Game Server Instance',
-                user: 1, // Admin user ID - you may need to change this
-                egg: parseInt(serverTemplate.egg) || parseInt(this.pterodactylConfig.gameServerEggId) || 5,
-                docker_image: serverTemplate.docker_image || 'ghcr.io/pterodactyl/yolks:nodejs_18',
-                startup: serverTemplate.startup || 'node gameserver.js',
-                limits: serverTemplate.limits || {
-                    memory: 512,
-                    swap: 0,
-                    disk: 1024,
-                    io: 500,
-                    cpu: 100
+                user: parseInt(serverTemplate.user) || 1, // Admin user ID
+                egg: parseInt(serverTemplate.egg) || parseInt(this.pterodactylConfig.gameServerEggId) || 20,
+                docker_image: serverTemplate.docker_image || 'ghcr.io/pterodactyl/yolks:ubuntu',
+                startup: serverTemplate.startup || './{{SERVER_JARFILE}} -batchmode -nographics -port {{SERVER_PORT}} -masterServer {{MASTER_SERVER_URL}} -serverName "{{SERVER_NAME}}" -maxPlayers {{MAX_PLAYERS}} -tickRate {{TICK_RATE}} -logFile logs/server.log -region {{REGION}} -gameMode {{GAME_MODE}} -autoUpdate {{AUTO_UPDATE}}',
+                oom_disabled: serverTemplate.oom_disabled || false,
+                limits: {
+                    memory: parseInt(serverTemplate.limits?.memory) || 512,
+                    swap: parseInt(serverTemplate.limits?.swap) || 0,
+                    disk: parseInt(serverTemplate.limits?.disk) || 1024,
+                    io: parseInt(serverTemplate.limits?.io) || 500,
+                    cpu: parseInt(serverTemplate.limits?.cpu) || 100,
+                    threads: serverTemplate.limits?.threads || null
                 },
-                feature_limits: serverTemplate.feature_limits || {
-                    databases: 0,
-                    allocations: 1,
-                    backups: 0
+                feature_limits: {
+                    databases: parseInt(serverTemplate.feature_limits?.databases) || 0,
+                    allocations: parseInt(serverTemplate.feature_limits?.allocations) || 1,
+                    backups: parseInt(serverTemplate.feature_limits?.backups) || 0
                 },
                 allocation: {
-                    default: allocation.id
+                    default: parseInt(allocation.id)
                 },
                 environment: {
-                    ...(serverTemplate.environment || {}),
-                    GAME_SERVER_ID: serverId,
-                    GAME_SERVER_PORT: allocation.port.toString(),
-                    MASTER_SERVER_URL: process.env.MASTER_SERVER_URL || 'https://localhost:8443',
-                    MAX_PLAYERS: this.serverConfig.maxPlayersPerServer.toString(),
-                    // Required egg environment variables
-                    SERVER_JARFILE: 'server.jar', // Default jar file name
-                    BUILD_NUMBER: 'latest' // Default build number
+                    // SkaffaCity Unity Server Egg Variables
+                    SERVER_JARFILE: serverTemplate.environment?.SERVER_JARFILE || 'SkaffaCityServer.x86_64',
+                    MASTER_SERVER_URL: serverTemplate.environment?.MASTER_SERVER_URL || process.env.MASTER_SERVER_URL || 'http://207.180.235.41:3000',
+                    SERVER_NAME: serverTemplate.environment?.SERVER_NAME || `SkaffaCity Server #${allocation.port}`,
+                    MAX_PLAYERS: serverTemplate.environment?.MAX_PLAYERS || this.serverConfig.maxPlayersPerServer.toString(),
+                    TICK_RATE: serverTemplate.environment?.TICK_RATE || '30',
+                    REGION: serverTemplate.environment?.REGION || 'EU-West',
+                    GAME_MODE: serverTemplate.environment?.GAME_MODE || 'standard',
+                    
+                    // GitHub Integration for Auto Updates
+                    GITHUB_REPO: serverTemplate.environment?.GITHUB_REPO || 'skaffvogel/skaffacity-serverbuild',
+                    GITHUB_BRANCH: serverTemplate.environment?.GITHUB_BRANCH || 'master',
+                    DOWNLOAD_URL: serverTemplate.environment?.DOWNLOAD_URL || 'https://github.com/skaffvogel/skaffacity-serverbuild/archive/refs/heads/master.zip',
+                    AUTO_UPDATE: serverTemplate.environment?.AUTO_UPDATE || '1',
+                    
+                    // Server Management
+                    AUTO_RESTART: serverTemplate.environment?.AUTO_RESTART || '1',
+                    DEBUG_MODE: serverTemplate.environment?.DEBUG_MODE || '0',
+                    
+                    // Internal tracking
+                    SKAFFA_SERVER_ID: serverId,
+                    SKAFFA_CREATED_BY: 'GameServerManager',
+                    SKAFFA_CREATED_AT: new Date().toISOString(),
+                    
+                    // Spread any additional environment variables from template
+                    ...(serverTemplate.environment || {})
                 }
             };
             
@@ -221,32 +247,40 @@ class GameServerManager {
                 createRequest,
                 {
                     headers: {
-                        'Authorization': `Bearer ${this.pterodactylConfig.apiKey}`,
+                        'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json'
                     }
                 }
             );
 
             if (response.status === 201) {
+                const serverData = response.data.attributes;
                 const serverInfo = {
-                    pterodactylId: response.data.attributes.id,
-                    uuid: response.data.attributes.uuid,
+                    pterodactylId: serverData.id,
+                    uuid: serverData.uuid,
                     name: serverName,
-                    status: 'starting',
+                    status: 'created',
                     playerCount: 0,
                     maxPlayers: this.serverConfig.maxPlayersPerServer,
                     port: allocation.port,
+                    ip: allocation.ip,
                     lastUpdate: Date.now()
                 };
 
                 this.servers.set(serverId, serverInfo);
                 
-                console.log(`[GameServerManager] ✅ Game server aangemaakt: ${serverName} (Poort: ${serverPort})`);
+                console.log(`[GameServerManager] ✅ Game server aangemaakt: ${serverName} (Poort: ${allocation.port})`);
+                console.log(`[GameServerManager] 🆔 Server UUID: ${serverData.uuid}`);
+                console.log(`[GameServerManager] 🌐 Server toegankelijk op: ${allocation.ip}:${allocation.port}`);
                 
-                // Start de server
-                await this.startServer(serverId);
-                
-                return serverInfo;
+                return {
+                    id: serverData.id,
+                    uuid: serverData.uuid,
+                    name: serverName,
+                    port: allocation.port,
+                    ip: allocation.ip,
+                    ...serverInfo
+                };
             }
         } catch (error) {
             console.error('[GameServerManager] ❌ Fout bij aanmaken server:', error.message);
