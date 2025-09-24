@@ -215,7 +215,11 @@ try {
             console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server start wel');
         }
     }).catch(error => {
-        console.warn('[MODULE] ⚠️ Model validatie error:', error.message);
+        console.error('[VALIDATOR] ❌ Validation failed:', error.message);
+        if (error.stack) {
+            console.error('[VALIDATOR] Stack:', error.stack);
+        }
+        console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server start wel');
     });
     
 } catch (error) {

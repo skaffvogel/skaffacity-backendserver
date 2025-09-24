@@ -14,18 +14,28 @@ async function validateModels() {
         const { User, Player, sequelize } = require('../models');
         console.log('[VALIDATOR] ✅ Models imported successfully');
         
-        // Test database connection
-        await sequelize.authenticate();
-        console.log('[VALIDATOR] ✅ Database connection successful');
+        // Test database connection (alleen als sequelize beschikbaar is)
+        if (sequelize) {
+            await sequelize.authenticate();
+            console.log('[VALIDATOR] ✅ Database connection successful');
+        } else {
+            console.log('[VALIDATOR] ⚠️  Sequelize not available, skipping database test');
+        }
         
         // Test model definitions
         if (User && Player) {
             console.log('[VALIDATOR] ✅ User and Player models defined');
+        } else if (!sequelize) {
+            console.log('[VALIDATOR] ⚠️  Sequelize models not available, using legacy models');
         } else {
             throw new Error('User or Player model not defined');
         }
         
-        console.log('[VALIDATOR] 🎉 All validations passed!');
+        if (sequelize) {
+            console.log('[VALIDATOR] 🎉 All validations passed!');
+        } else {
+            console.log('[VALIDATOR] ⚠️  Validation completed (legacy mode)');
+        }
         return true;
         
     } catch (error) {
