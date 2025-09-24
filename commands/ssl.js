@@ -74,11 +74,16 @@ class SSLCommand {
     }
 
     async toggleHTTPS() {
-        const config = this.loadConfig();
+        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
         const currentStatus = config.server.enableHTTPS;
         
-        config.server.enableHTTPS = !currentStatus;
-        this.saveConfig(config);
+        const newStatus = !currentStatus;
+        if (global.configManager) {
+            global.configManager.set('server.enableHTTPS', newStatus);
+        } else {
+            config.server.enableHTTPS = newStatus;
+            this.saveConfig(config);
+        }
         
         const status = config.server.enableHTTPS ? 'enabled' : 'disabled';
         const emoji = config.server.enableHTTPS ? '🔐' : '🔓';
@@ -90,9 +95,13 @@ class SSLCommand {
     }
 
     async enableHTTPS() {
-        const config = this.loadConfig();
-        config.server.enableHTTPS = true;
-        this.saveConfig(config);
+        if (global.configManager) {
+            global.configManager.set('server.enableHTTPS', true);
+        } else {
+            const config = this.loadConfig();
+            config.server.enableHTTPS = true;
+            this.saveConfig(config);
+        }
         
         console.log('[SSL] 🔐 HTTPS enabled');
         console.log('[SSL] 🔄 Restart server to apply changes');
@@ -101,9 +110,13 @@ class SSLCommand {
     }
 
     async disableHTTPS() {
-        const config = this.loadConfig();
-        config.server.enableHTTPS = false;
-        this.saveConfig(config);
+        if (global.configManager) {
+            global.configManager.set('server.enableHTTPS', false);
+        } else {
+            const config = this.loadConfig();
+            config.server.enableHTTPS = false;
+            this.saveConfig(config);
+        }
         
         console.log('[SSL] 🔓 HTTPS disabled');
         console.log('[SSL] 🔄 Restart server to apply changes');
@@ -116,7 +129,7 @@ class SSLCommand {
         console.log('║                      SSL Status                          ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
         
-        const config = this.loadConfig();
+        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
         const httpsEnabled = config.server.enableHTTPS;
         const httpsEmoji = httpsEnabled ? '🔐' : '🔓';
         const httpsStatus = httpsEnabled ? 'ENABLED' : 'DISABLED';

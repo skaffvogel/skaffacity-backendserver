@@ -33,6 +33,9 @@ class ConfigCommand {
             case 'reload':
                 await this.reloadConfig();
                 break;
+            case 'watch':
+                await this.toggleWatch();
+                break;
             default:
                 this.showHelp();
                 break;
@@ -40,7 +43,7 @@ class ConfigCommand {
     }
 
     async showConfig() {
-        const config = this.loadConfig();
+        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
         
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                  Server Configuration                    ║');
@@ -79,8 +82,7 @@ class ConfigCommand {
             return;
         }
 
-        const config = this.loadConfig();
-        const value = this.getNestedValue(config, key);
+        const value = global.configManager ? global.configManager.get(key) : this.getNestedValue(this.loadConfig(), key);
         
         if (value !== undefined) {
             console.log(`[CONFIG] ${key} = ${JSON.stringify(value)}`);
@@ -95,8 +97,6 @@ class ConfigCommand {
             console.log('[CONFIG] 💡 Example: config set server.port 8080');
             return;
         }
-
-        const config = this.loadConfig();
         
         // Try to parse value as JSON first, then as string
         let parsedValue = value;
@@ -106,12 +106,25 @@ class ConfigCommand {
             // Keep as string if JSON parsing fails
         }
         
-        if (this.setNestedValue(config, key, parsedValue)) {
-            this.saveConfig(config);
-            console.log(`[CONFIG] ✅ Updated ${key} = ${JSON.stringify(parsedValue)}`);
-            console.log('[CONFIG] 🔄 Restart server to apply changes');
+        if (global.configManager) {
+            // Use config manager for live updates
+            if (global.configManager.set(key, parsedValue)) {
+                console.log(`[CONFIG] ✅ Updated ${key} = ${JSON.stringify(parsedValue)}`);
+                console.log('[CONFIG] 🔄 Configuration reloaded automatically');
+                console.log('[CONFIG] 💡 Server restart may be needed for some changes');
+            } else {
+                console.log(`[CONFIG] ❌ Failed to set ${key}`);
+            }
         } else {
-            console.log(`[CONFIG] ❌ Failed to set ${key}`);
+            // Fallback to manual method
+            const config = this.loadConfig();
+            if (this.setNestedValue(config, key, parsedValue)) {
+                this.saveConfig(config);
+                console.log(`[CONFIG] ✅ Updated ${key} = ${JSON.stringify(parsedValue)}`);
+                console.log('[CONFIG] 🔄 Restart server to apply changes');
+            } else {
+                console.log(`[CONFIG] ❌ Failed to set ${key}`);
+            }
         }
     }
 
@@ -166,14 +179,30 @@ class ConfigCommand {
     }
 
     async reloadConfig() {
-        try {
-            // Test if config is valid JSON
-            this.loadConfig();
-            console.log('[CONFIG] ✅ Configuration file is valid');
-            console.log('[CONFIG] 🔄 Restart server to reload configuration');
-        } catch (error) {
-            console.error('[CONFIG] ❌ Configuration file is invalid:', error.message);
+        if (global.configManager) {
+            // Use config manager for live reload
+            if (global.configManager.reloadConfig()) {
+                console.log('[CONFIG] ✅ Configuration reloaded successfully');
+                console.log('[CONFIG] 🔄 Some changes may require server restart');
+            } else {
+                console.log('[CONFIG] ❌ Failed to reload configuration');
+            }
+        } else {
+            // Fallback to validation only
+            try {
+                this.loadConfig();
+                console.log('[CONFIG] ✅ Configuration file is valid');
+                console.log('[CONFIG] 🔄 Restart server to reload configuration');
+            } catch (error) {
+                console.error('[CONFIG] ❌ Configuration file is invalid:', error.message);
+            }
         }
+    }
+
+    async toggleWatch() {
+        console.log('[CONFIG] 👀 File watching is automatically enabled');
+        console.log('[CONFIG] 💡 Configuration changes are detected automatically');
+        console.log('[CONFIG] 📁 Edit config.json and changes will be applied instantly');
     }
 
     getNestedValue(obj, path) {
@@ -207,7 +236,8 @@ class ConfigCommand {
         console.log('║  config get <key>     - Get specific config value       ║');
         console.log('║  config set <key> <v> - Set config value                ║');
         console.log('║  config reset         - Reset to default config         ║');
-        console.log('║  config reload        - Validate config file            ║');
+        console.log('║  config reload        - Reload configuration            ║');
+        console.log('║  config watch         - Show file watching info         ║');
         console.log('║                                                          ║');
         console.log('║  Examples:                                               ║');
         console.log('║  config get server.port                                  ║');

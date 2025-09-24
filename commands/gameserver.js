@@ -158,7 +158,7 @@ class GameServerCommand {
     async showStatus() {
         console.log('[GAMESERVER] 📊 Game server status overview...');
         
-        const config = this.loadConfig();
+        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
         
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║                 Game Server Status                       ║');
@@ -180,7 +180,7 @@ class GameServerCommand {
     }
 
     async showConfig() {
-        const config = this.loadConfig();
+        const config = global.configManager ? global.configManager.getConfig() : this.loadConfig();
         
         console.log('\n╔══════════════════════════════════════════════════════════╗');
         console.log('║               Game Server Configuration                  ║');

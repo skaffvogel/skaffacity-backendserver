@@ -25,25 +25,11 @@ console.log('[MODULE] Command handler laden...');
 const commandHandler = require('./commands/handler');
 console.log('[MODULE] Command handler geladen!');
 
-// Server configuratie laden uit config.json
+// Server configuratie laden via ConfigManager
 console.log('[MODULE] Server configuratie laden...');
-let config;
-try {
-    config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
-} catch (error) {
-    console.error('[ERROR] Kan config.json niet laden:', error.message);
-    process.exit(1);
-}
-
-const serverConfig = {
-    port: config.server.port,
-    httpsPort: config.server.httpsPort,
-    host: config.server.host,
-    apiPrefix: config.server.apiPrefix,
-    enableHTTPS: config.server.enableHTTPS,
-    sslKeyPath: path.join(__dirname, config.ssl.keyPath),
-    sslCertPath: path.join(__dirname, config.ssl.certPath)
-};
+const configManager = require('./utils/config-manager');
+const config = configManager.getConfig();
+const serverConfig = configManager.getServerConfig();
 
 console.log('[MODULE] Server configuratie geladen!', {
     port: serverConfig.port,
@@ -54,6 +40,9 @@ console.log('[MODULE] Server configuratie geladen!', {
     sslKeyPath: serverConfig.enableHTTPS ? serverConfig.sslKeyPath : 'N/A',
     sslCertPath: serverConfig.enableHTTPS ? serverConfig.sslCertPath : 'N/A'
 });
+
+// Maak config manager beschikbaar voor commands
+global.configManager = configManager;
 
 console.log('[MODULE] Database connectie laden...');
 const db = require('./utils/db');
