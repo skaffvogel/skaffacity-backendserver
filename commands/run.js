@@ -32,10 +32,15 @@ class RunCommand {
 
     executeCommand(command) {
         return new Promise((resolve, reject) => {
+            // Set working directory to the src directory where package.json is located
+            const workingDir = path.resolve(__dirname, '../');
+            console.log(`[RUN] 📁 Working directory: ${workingDir}`);
+            
             const childProcess = exec(command, {
-                cwd: path.join(__dirname, '../../'),
+                cwd: workingDir,
                 env: { ...process.env },
-                maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+                maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+                shell: true // Ensure proper shell execution
             });
 
             childProcess.stdout.on('data', (data) => {
