@@ -11,8 +11,20 @@ const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
 
-// Config en database importeren
-const config = require('./config/config.json');
+// Config en database importeren (met fallback)
+let config;
+try {
+    config = require('./config/config.json');
+} catch (error) {
+    console.warn('Config file not found, using environment variables');
+    config = {
+        server: {
+            port: process.env.PORT || 8000,
+            host: process.env.HOST || '0.0.0.0',
+            apiPrefix: '/api/v1'
+        }
+    };
+}
 const db = require('./utils/db');
 const models = require('./utils/database');
 

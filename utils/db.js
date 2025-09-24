@@ -6,9 +6,26 @@ const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
 
-// Laad de configuratie
-const config = require('./config/config.json');
-const { database: dbConfig } = config;
+// Laad de configuratie (met fallback)
+let config, dbConfig;
+try {
+    config = require('./config/config.json');
+    dbConfig = config.database;
+} catch (error) {
+    console.warn('Config file not found, using environment variables');
+    // Fallback naar environment variables
+    config = {
+        database: {
+            host: process.env.DB_HOST || '207.180.235.41',
+            port: process.env.DB_PORT || 3306,
+            name: process.env.DB_NAME || 'skaffacity',
+            user: process.env.DB_USER || 'skaffa',
+            password: process.env.DB_PASSWORD || 'defaultpassword',
+            connectionLimit: 10
+        }
+    };
+    dbConfig = config.database;
+}
 
 // Database pool voor efficiënt verbindingsbeheer
 let pool;
