@@ -4,8 +4,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('./middleware/auth');
-const factionController = require('./controllers/faction.controller');
+const { authenticateToken } = require('../middleware/auth');
+const factionController = require('../controllers/faction.controller');
 
 // Factie routes
 router.get('/', authenticateToken, factionController.getAllFactions);

@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('./middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // Importeer auth controller
 const {
@@ -13,7 +13,7 @@ const {
     refreshToken,
     getUserProfile,
     updateUserProfile
-} = require('./controllers/auth.controller');
+} = require('../controllers/auth.controller');
 
 // Auth routes
 router.post('/register', register);

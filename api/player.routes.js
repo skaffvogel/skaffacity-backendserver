@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('./middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // Importeer player controller
 const { 
@@ -14,7 +14,7 @@ const {
     getAllPlayers,
     getPlayerById,
     deletePlayer
-} = require('./controllers/player.controller');
+} = require('../controllers/player.controller');
 
 // Speler routes
 router.post('/register', authenticateToken, registerPlayer);

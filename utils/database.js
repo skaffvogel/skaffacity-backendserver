@@ -10,7 +10,7 @@ const path = require('path');
 console.log('Current directory:', process.cwd());
 console.log('__dirname:', __dirname);
 if (fs.existsSync('../models')) {
-    console.log('Models directory exists, contents:', fs.readdirSync('../models'));
+    console.log('Models directory exists at ../models, contents:', fs.readdirSync('../models'));
 } else if (fs.existsSync('./models')) {
     console.log('Models directory exists at ./models, contents:', fs.readdirSync('./models'));
 } else {

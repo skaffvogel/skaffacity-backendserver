@@ -6,7 +6,7 @@ const express = require('express');
 const router = express.Router();
 
 // Middleware
-const { authenticateToken: authMiddleware } = require('./middleware/auth');
+const { authenticateToken: authMiddleware } = require('../middleware/auth');
 
 /**
  * @route   GET /api/v1/cosmetics

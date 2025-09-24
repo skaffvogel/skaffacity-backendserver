@@ -4,8 +4,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, isAdmin } = require('./middleware/auth');
-const economyController = require('./controllers/economy.controller');
+const { authenticateToken, isAdmin } = require('../middleware/auth');
+const economyController = require('../controllers/economy.controller');
 
 // Economie routes
 router.get('/balance', authenticateToken, economyController.getBalance);
