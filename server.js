@@ -195,13 +195,24 @@ app.use(`${apiPrefix}/factions`, factionRoutes);
 console.log('[MODULE] Faction Wars endpoints registreren op', `${apiPrefix}/faction-wars`);
 app.use(`${apiPrefix}/faction-wars`, factionWarsRoutes);
 
-// Game Server Management routes
+// Game Server Management routes (optioneel - alleen laden als modules beschikbaar zijn)
 console.log('[MODULE] Game Server routes laden...');
-const gameServerRoutes = require('./api/gameserver.routes');
-console.log('[MODULE] Game Server routes geladen!');
+let gameServerRoutes;
+try {
+    gameServerRoutes = require('./api/gameserver.routes');
+    console.log('[MODULE] Game Server routes geladen!');
+} catch (error) {
+    console.warn('[MODULE] ⚠️ Game Server routes niet beschikbaar:', error.message);
+    console.warn('[MODULE] Installeer dependencies met: npm install');
+    gameServerRoutes = null;
+}
 
-console.log('[MODULE] Game Server endpoints registreren op', `${apiPrefix}/gameservers`);
-app.use(`${apiPrefix}/gameservers`, authenticateToken, gameServerRoutes);
+if (gameServerRoutes) {
+    console.log('[MODULE] Game Server endpoints registreren op', `${apiPrefix}/gameservers`);
+    app.use(`${apiPrefix}/gameservers`, authenticateToken, gameServerRoutes);
+} else {
+    console.warn('[MODULE] ⚠️ Game Server endpoints overgeslagen (dependencies ontbreken)');
+}
 
 console.log('[MODULE] Alle API routes geregistreerd!');
 
