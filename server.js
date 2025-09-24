@@ -20,19 +20,37 @@ const https = require('https');
 const http = require('http');
 console.log('[MODULE] Core modules geladen!');
 
-// Server configuratie via environment variables
+// Command handler voor Pterodactyl console commands
+console.log('[MODULE] Command handler laden...');
+const commandHandler = require('./commands/handler');
+console.log('[MODULE] Command handler geladen!');
+
+// Server configuratie laden uit config.json
 console.log('[MODULE] Server configuratie laden...');
+let config;
+try {
+    config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+} catch (error) {
+    console.error('[ERROR] Kan config.json niet laden:', error.message);
+    process.exit(1);
+}
+
 const serverConfig = {
-    port: process.env.PORT || 8000,
-    httpsPort: process.env.HTTPS_PORT || 8443,
-    host: process.env.HOST || '0.0.0.0',
-    apiPrefix: '/api/v1',
-    enableHTTPS: process.env.ENABLE_HTTPS === 'true' || false,
-    sslKeyPath: process.env.SSL_KEY_PATH || path.join(__dirname, '../ssl/private-key.pem'),
-    sslCertPath: process.env.SSL_CERT_PATH || path.join(__dirname, '../ssl/certificate.pem')
+    port: config.server.port,
+    httpsPort: config.server.httpsPort,
+    host: config.server.host,
+    apiPrefix: config.server.apiPrefix,
+    enableHTTPS: config.server.enableHTTPS,
+    sslKeyPath: path.join(__dirname, config.ssl.keyPath),
+    sslCertPath: path.join(__dirname, config.ssl.certPath)
 };
+
 console.log('[MODULE] Server configuratie geladen!', {
-    ...serverConfig,
+    port: serverConfig.port,
+    httpsPort: serverConfig.httpsPort,
+    host: serverConfig.host,
+    apiPrefix: serverConfig.apiPrefix,
+    enableHTTPS: serverConfig.enableHTTPS,
     sslKeyPath: serverConfig.enableHTTPS ? serverConfig.sslKeyPath : 'N/A',
     sslCertPath: serverConfig.enableHTTPS ? serverConfig.sslCertPath : 'N/A'
 });
@@ -105,8 +123,6 @@ console.log('[MODULE] Auth middleware geladen!');
 // Express app initialiseren
 console.log('[MODULE] Express app initialiseren...');
 const app = express();
-const PORT = process.env.PORT || serverConfig.port;
-const HOST = process.env.HOST || serverConfig.host;
 console.log('[MODULE] Express app geïnitialiseerd!');
 
 // Logging configureren
@@ -270,9 +286,6 @@ const startServer = async () => {
     console.log('[MODULE] ✅ Database initialisatie voltooid!');
     
     // Server starten
-    const PORT = serverConfig.port;
-    const HTTPS_PORT = serverConfig.httpsPort;
-    const HOST = serverConfig.host;
     
     if (serverConfig.enableHTTPS) {
       console.log('[MODULE] HTTPS server starten...');
@@ -294,18 +307,18 @@ const startServer = async () => {
       
       // Start HTTPS server
       const httpsServer = https.createServer(sslOptions, app);
-      httpsServer.listen(HTTPS_PORT, HOST, () => {
+      httpsServer.listen(serverConfig.httpsPort, serverConfig.host, () => {
         console.log('[MODULE] ✅ HTTPS server gestart!');
       });
       
       // Start ook HTTP server voor redirects
       const httpApp = express();
       httpApp.use((req, res) => {
-        res.redirect(`https://${req.headers.host.split(':')[0]}:${HTTPS_PORT}${req.url}`);
+        res.redirect(`https://${req.headers.host.split(':')[0]}:${serverConfig.httpsPort}${req.url}`);
       });
       
       const httpServer = http.createServer(httpApp);
-      httpServer.listen(PORT, HOST, () => {
+      httpServer.listen(serverConfig.port, serverConfig.host, () => {
         console.log('[MODULE] ✅ HTTP redirect server gestart!');
         console.log(`
 ╔════════════════════════════════════════════════════════╗
@@ -315,9 +328,9 @@ const startServer = async () => {
 ║                                                        ║
 ╠════════════════════════════════════════════════════════╣
 ║                                                        ║
-║  HTTPS: https://${HOST}:${HTTPS_PORT}${serverConfig.apiPrefix}             ║
-║  Health: https://${HOST}:${HTTPS_PORT}${serverConfig.apiPrefix}/health      ║
-║  HTTP Redirect: http://${HOST}:${PORT} → HTTPS         ║
+║  HTTPS: https://${serverConfig.host}:${serverConfig.httpsPort}${serverConfig.apiPrefix}             ║
+║  Health: https://${serverConfig.host}:${serverConfig.httpsPort}${serverConfig.apiPrefix}/health      ║
+║  HTTP Redirect: http://${serverConfig.host}:${serverConfig.port} → HTTPS         ║
 ║                                                        ║
 ║  Omgeving: ${process.env.NODE_ENV || 'development'}                               ║
 ║  Database: MySQL - ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}   ║
@@ -330,7 +343,7 @@ const startServer = async () => {
       });
     } else {
       console.log('[MODULE] HTTP server starten...');
-      app.listen(PORT, HOST, () => {
+      app.listen(serverConfig.port, serverConfig.host, () => {
         console.log('[MODULE] ✅ HTTP server gestart!');
         console.log(`
 ╔════════════════════════════════════════════════════════╗
@@ -340,8 +353,8 @@ const startServer = async () => {
 ║                                                        ║
 ╠════════════════════════════════════════════════════════╣
 ║                                                        ║
-║  Server: http://${HOST}:${PORT}${serverConfig.apiPrefix}                      ║
-║  Health: http://${HOST}:${PORT}${serverConfig.apiPrefix}/health             ║
+║  Server: http://${serverConfig.host}:${serverConfig.port}${serverConfig.apiPrefix}                      ║
+║  Health: http://${serverConfig.host}:${serverConfig.port}${serverConfig.apiPrefix}/health             ║
 ║                                                        ║
 ║  Omgeving: ${process.env.NODE_ENV || 'development'}                               ║
 ║  Database: MySQL - ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}   ║

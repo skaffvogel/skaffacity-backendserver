@@ -1,0 +1,64 @@
+{
+  "server": {
+    "port": 8000,
+    "httpsPort": 8443,
+    "host": "0.0.0.0",
+    "apiPrefix": "/api/v1",
+    "enableHTTPS": false
+  },
+  "ssl": {
+    "keyPath": "../ssl/private-key.pem",
+    "certPath": "../ssl/certificate.pem"
+  },
+  "database": {
+    "host": "207.180.235.41",
+    "port": 3306,
+    "database": "s14_skaffacity",
+    "username": "u14_Sz62GJBI8E"
+  },
+  "gameServer": {
+    "pterodactyl": {
+      "enabled": false,
+      "apiUrl": "",
+      "apiKey": "",
+      "serverId": ""
+    },
+    "maxServers": 5,
+    "autoScale": true,
+    "serverTemplate": {
+      "name": "SkaffaCity-GameServer",
+      "egg": 5,
+      "docker_image": "ghcr.io/pterodactyl/yolks:nodejs_18",
+      "startup": "node gameserver.js",
+      "environment": {
+        "STARTUP": "node gameserver.js",
+        "P_SERVER_LOCATION": "primary",
+        "P_SERVER_UUID": "{{uuid}}"
+      },
+      "limits": {
+        "memory": 512,
+        "swap": 0,
+        "disk": 1024,
+        "io": 500,
+        "cpu": 100
+      },
+      "feature_limits": {
+        "databases": 0,
+        "allocations": 1,
+        "backups": 0
+      }
+    }
+  },
+  "security": {
+    "jwtSecret": "your-jwt-secret-key",
+    "bcryptRounds": 10,
+    "rateLimitWindowMs": 900000,
+    "rateLimitMax": 100
+  },
+  "logging": {
+    "level": "info",
+    "enableConsole": true,
+    "enableFile": true,
+    "logDirectory": "./logs"
+  }
+}
