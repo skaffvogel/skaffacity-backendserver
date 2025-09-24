@@ -2,10 +2,10 @@
  * Auth controller voor authenticatie en gebruikersbeheer
  */
 
-const { User, Player } = require('../models');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { Op } = require('sequelize');
+const { User, Player } = require('../models');
 
 // Helper functie voor het genereren van JWT tokens
 const generateToken = (user, player) => {

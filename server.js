@@ -34,10 +34,27 @@ console.log('[MODULE] Database connectie geladen!');
 console.log('[MODULE] Database models laden...');
 let models;
 try {
-    models = require('./utils/database');
-    console.log('[MODULE] Database models geladen!');
+    // Test en laad de nieuwe Sequelize models
+    const { validateModels } = require('./utils/model-validator');
+    
+    // Probeer eerst de nieuwe Sequelize models
+    models = require('./models');
+    console.log('[MODULE] Sequelize models geladen!');
+    
+    // Valideer de models (maar start de server ook als validatie faalt)
+    validateModels().then(isValid => {
+        if (isValid) {
+            console.log('[MODULE] ✅ Model validatie succesvol!');
+        } else {
+            console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server start wel');
+        }
+    }).catch(error => {
+        console.warn('[MODULE] ⚠️ Model validatie error:', error.message);
+    });
+    
 } catch (error) {
-    console.warn('[MODULE] Database models niet gevonden, server start zonder models');
+    console.warn('[MODULE] Database models fout:', error.message);
+    console.warn('[MODULE] Server start zonder Sequelize models');
     models = {};
 }
 
