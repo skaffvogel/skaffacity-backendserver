@@ -11,23 +11,33 @@ class GameServerManager {
         this.servers = new Map(); // serverId -> serverInfo
         this.playerQueue = new Map(); // playerId -> queueInfo
         
-        // Pterodactyl Panel Configuration
+        // Load configuration from ConfigManager or fallback to environment variables
+        const gameserverConfig = global.configManager ? global.configManager.getConfig('gameserver') : null;
+        
+        // Pterodactyl Panel Configuration - try modular config first, then env vars
         this.pterodactylConfig = {
-            apiUrl: process.env.PTERODACTYL_API_URL || 'https://panel.yourdomain.com/api',
-            apiKey: process.env.PTERODACTYL_API_KEY || '',
-            gameServerNestId: process.env.GAME_SERVER_NEST_ID || '1',
-            gameServerEggId: process.env.GAME_SERVER_EGG_ID || '1'
+            apiUrl: gameserverConfig?.pterodactyl?.apiUrl || process.env.PTERODACTYL_API_URL || 'https://panel.yourdomain.com/api',
+            apiKey: gameserverConfig?.pterodactyl?.apiKey || process.env.PTERODACTYL_API_KEY || '',
+            adminApiKey: gameserverConfig?.pterodactyl?.adminApiKey || process.env.PTERODACTYL_ADMIN_API_KEY || '',
+            clientApiKey: gameserverConfig?.pterodactyl?.clientApiKey || process.env.PTERODACTYL_CLIENT_API_KEY || '',
+            gameServerNestId: gameserverConfig?.pterodactyl?.nestId || process.env.GAME_SERVER_NEST_ID || '1',
+            gameServerEggId: gameserverConfig?.pterodactyl?.eggId || process.env.GAME_SERVER_EGG_ID || '1'
         };
         
         this.serverConfig = {
-            maxPlayersPerServer: parseInt(process.env.MAX_PLAYERS_PER_SERVER) || 50,
-            serverStartPort: parseInt(process.env.SERVER_START_PORT) || 7001,
-            autoScaleEnabled: process.env.AUTO_SCALE_ENABLED === 'true' || true,
-            minIdleServers: parseInt(process.env.MIN_IDLE_SERVERS) || 1,
-            maxTotalServers: parseInt(process.env.MAX_TOTAL_SERVERS) || 10
+            maxPlayersPerServer: gameserverConfig?.maxPlayersPerServer || parseInt(process.env.MAX_PLAYERS_PER_SERVER) || 50,
+            serverStartPort: gameserverConfig?.serverStartPort || parseInt(process.env.SERVER_START_PORT) || 7001,
+            autoScaleEnabled: gameserverConfig?.autoScale || (process.env.AUTO_SCALE_ENABLED === 'true') || true,
+            minIdleServers: gameserverConfig?.minIdleServers || parseInt(process.env.MIN_IDLE_SERVERS) || 1,
+            maxTotalServers: gameserverConfig?.maxServers || parseInt(process.env.MAX_TOTAL_SERVERS) || 10
         };
         
         console.log('[GameServerManager] Geïnitialiseerd met configuratie:', this.serverConfig);
+        
+        // Check if we have valid configuration
+        if (!this.pterodactylConfig.apiKey && !this.pterodactylConfig.adminApiKey) {
+            console.warn('[GameServerManager] ⚠️ Geen API keys geconfigureerd - Pterodactyl functionaliteit niet beschikbaar');
+        }
     }
 
     /**
@@ -61,15 +71,16 @@ class GameServerManager {
      * Test verbinding met Pterodactyl Panel
      */
     async testPterodactylConnection() {
-        if (!this.pterodactylConfig.apiKey) {
-            throw new Error('PTERODACTYL_API_KEY niet geconfigureerd');
+        const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
+        if (!apiKey) {
+            throw new Error('Geen Pterodactyl API key geconfigureerd (adminApiKey of apiKey vereist)');
         }
 
         console.log('[GameServerManager] Pterodactyl verbinding testen...');
         
         const response = await axios.get(`${this.pterodactylConfig.apiUrl}/application/users`, {
             headers: {
-                'Authorization': `Bearer ${this.pterodactylConfig.apiKey}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
             }
         });
