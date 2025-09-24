@@ -16,11 +16,11 @@ try {
     // Fallback naar environment variables
     config = {
         database: {
-            host: process.env.DB_HOST || '207.180.235.41',
+            host: process.env.DB_HOST || 'localhost',
             port: process.env.DB_PORT || 3306,
             name: process.env.DB_NAME || 'skaffacity',
-            user: process.env.DB_USER || 'skaffa',
-            password: process.env.DB_PASSWORD || 'defaultpassword',
+            user: process.env.DB_USER || 'u1_skaffacity',
+            password: process.env.DB_PASSWORD || '',
             connectionLimit: 10
         }
     };
