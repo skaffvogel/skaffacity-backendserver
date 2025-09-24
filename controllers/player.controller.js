@@ -2,8 +2,8 @@
  * Player controller voor het afhandelen van speler synchronisatie
  */
 
-const Player = require('../models/player.mysql');
-const User = require('../models/user.mysql');
+const Player = require('./models/player.mysql');
+const User = require('./models/user.mysql');
 
 // Helper functie om position en rotation formaat te converteren
 const formatPosition = (posArray) => {

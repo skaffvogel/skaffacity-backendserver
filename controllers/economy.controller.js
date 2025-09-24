@@ -2,9 +2,9 @@
  * Economy controller voor SKAFF transacties en beheer
  */
 
-const User = require('../models/user.mysql');
-const Transaction = require('../models/transaction.mysql');
-const db = require('../utils/db');
+const User = require('./models/user.mysql');
+const Transaction = require('./models/transaction.mysql');
+const db = require('./utils/db');
 
 /**
  * Krijg SKAFF balans van gebruiker

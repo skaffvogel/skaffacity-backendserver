@@ -3,7 +3,7 @@
  */
 
 const jwt = require('jsonwebtoken');
-const User = require('../models/user.mysql');
+const User = require('./models/user.mysql');
 
 /**
  * Controleer JWT token en zet de gebruiker op req object

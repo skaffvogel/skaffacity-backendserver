@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Laad de configuratie
-const config = require('../config/config.json');
+const config = require('./config/config.json');
 const { database: dbConfig } = config;
 
 // Database pool voor efficiënt verbindingsbeheer
@@ -229,7 +229,7 @@ const initModelTables = async () => {
     console.log('Model tabellen initialiseren...');
     
     // Importeer de modellen dynamisch
-    const Transaction = require('../models/transaction.mysql');
+    const Transaction = require('./models/transaction.mysql');
     
     // Initialiseer de tabellen
     if (Transaction.initTable && typeof Transaction.initTable === 'function') {

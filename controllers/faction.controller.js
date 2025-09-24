@@ -2,9 +2,9 @@
  * Faction controller voor factie beheer
  */
 
-const Faction = require('../models/faction.mysql');
-const Player = require('../models/player.mysql');
-const User = require('../models/user.mysql');
+const Faction = require('./models/faction.mysql');
+const Player = require('./models/player.mysql');
+const User = require('./models/user.mysql');
 
 /**
  * Krijg alle actieve facties

@@ -26,7 +26,7 @@ const cosmeticsRoutes = require('./api/cosmetics.routes');
 const ovenRoutes = require('./api/oven.routes');
 
 // Middleware importeren
-const { authenticate } = require('./middleware/auth.middleware');
+const { authenticateToken } = require('./middleware/auth');
 
 // Express app initialiseren
 const app = express();
@@ -34,7 +34,7 @@ const PORT = process.env.PORT || config.server.port;
 const HOST = process.env.HOST || config.server.host;
 
 // Logging configureren
-const logDirectory = path.join(__dirname, '../logs');
+const logDirectory = path.join(__dirname, './logs');
 fs.existsSync(logDirectory) || fs.mkdirSync(logDirectory);
 const accessLogStream = fs.createWriteStream(
   path.join(logDirectory, 'access.log'), 
@@ -68,12 +68,12 @@ app.use((req, res, next) => {
 const apiPrefix = config.server.apiPrefix || '/api/v1';
 
 app.use(`${apiPrefix}/auth`, authRoutes);
-app.use(`${apiPrefix}/player`, authenticate, playerRoutes);
-app.use(`${apiPrefix}/economy`, authenticate, economyRoutes);
-app.use(`${apiPrefix}/inventory`, authenticate, inventoryRoutes);
-app.use(`${apiPrefix}/safezone`, authenticate, safeZoneRoutes);
-app.use(`${apiPrefix}/cosmetics`, authenticate, cosmeticsRoutes);
-app.use(`${apiPrefix}/oven`, authenticate, ovenRoutes);
+app.use(`${apiPrefix}/player`, authenticateToken, playerRoutes);
+app.use(`${apiPrefix}/economy`, authenticateToken, economyRoutes);
+app.use(`${apiPrefix}/inventory`, authenticateToken, inventoryRoutes);
+app.use(`${apiPrefix}/safezone`, authenticateToken, safeZoneRoutes);
+app.use(`${apiPrefix}/cosmetics`, authenticateToken, cosmeticsRoutes);
+app.use(`${apiPrefix}/oven`, authenticateToken, ovenRoutes);
 
 // Health check endpoint
 app.get(`${apiPrefix}/health`, (req, res) => {

@@ -9,7 +9,7 @@ const mysql = require('mysql2/promise');
 const prompts = require('prompts');
 const fs = require('fs');
 const path = require('path');
-const config = require('../config/config.json');
+const config = require('./config/config.json');
 
 // Instellingen voor de database
 const DB_NAME = config.database.name || 'skaffacity';
@@ -137,7 +137,7 @@ async function setupDatabase() {
     console.log('Config.json wordt bijgewerkt...');
     
     // Laad het bestaande config bestand
-    const configPath = path.join(__dirname, '../config/config.json');
+    const configPath = path.join(__dirname, './config/config.json');
     const configContent = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     
     // Update database configuratie

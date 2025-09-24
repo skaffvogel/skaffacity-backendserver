@@ -5,5 +5,7 @@
 
 const { authenticateToken } = require('./auth');
 
-// Exporteer de middleware functie als authMiddleware
+// Exporteer beide varianten voor compatibiliteit
 exports.authMiddleware = authenticateToken;
+exports.authenticate = authenticateToken;
+exports.authenticateToken = authenticateToken;

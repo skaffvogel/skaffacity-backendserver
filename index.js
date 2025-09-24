@@ -39,7 +39,7 @@ const PORT = process.env.PORT || 8080;
 
 // Middleware voor logging
 // Setup log directory
-const logDir = path.join(__dirname, '../logs');
+const logDir = path.join(__dirname, './logs');
 if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir);
 }

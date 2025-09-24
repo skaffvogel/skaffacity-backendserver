@@ -5,8 +5,8 @@
 
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-const db = require('../utils/db');
-const config = require('../config/config.json');
+const db = require('./utils/db');
+const config = require('./config/config.json');
 
 class User {
   constructor(data = {}) {
