@@ -154,7 +154,7 @@ class GameServerManager {
     /**
      * Maak nieuwe game server aan via Pterodactyl
      */
-    async createGameServer() {
+    async createGameServer(templateOverride = null) {
         console.log('[GameServerManager] Nieuwe game server aanmaken...');
 
         if (this.servers.size >= this.serverConfig.maxTotalServers) {
@@ -175,9 +175,21 @@ class GameServerManager {
             
             console.log(`[GameServerManager] ✅ Using allocation ID: ${allocation.id} (${allocation.ip}:${allocation.port})`);
 
-            // Get configuration from modular config
+            // Verify allocation is available for assignment, find alternative if needed
+            try {
+                await this.verifyAllocationAvailable(allocation.id);
+            } catch (allocationError) {
+                console.log(`[GameServerManager] ⚠️ Allocation ${allocation.id} not available: ${allocationError.message}`);
+                console.log(`[GameServerManager] 🔄 Finding alternative allocation...`);
+                
+                // Find next available unassigned allocation
+                allocation = await this.findAvailableAllocation();
+                console.log(`[GameServerManager] ✅ Using alternative allocation ID: ${allocation.id} (${allocation.ip}:${allocation.port})`);
+            }
+
+            // Get configuration from modular config or use override
             const gameserverConfig = global.configManager ? global.configManager.getConfig('gameserver') : null;
-            const serverTemplate = gameserverConfig?.serverTemplate || {};
+            const serverTemplate = templateOverride || gameserverConfig?.serverTemplate || {};
             
             // Use admin API key for server creation
             const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
@@ -568,6 +580,13 @@ class GameServerManager {
     }
 
     /**
+     * Create a new server with specific template override
+     */
+    async createServerWithTemplate(templateOverride) {
+        return await this.createGameServer(templateOverride);
+    }
+
+    /**
      * Check Pterodactyl connection (alias for testPterodactylConnection)
      */
     async checkPterodactylConnection() {
@@ -619,6 +638,89 @@ class GameServerManager {
         }
         
         return { targetCount, currentCount, action: targetCount > currentCount ? 'scaled_up' : targetCount < currentCount ? 'scaled_down' : 'no_change' };
+    }
+
+    /**
+     * Verify allocation is available for assignment
+     */
+    async verifyAllocationAvailable(allocationId) {
+        const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
+        
+        try {
+            console.log(`[GameServerManager] 🔍 Verifying allocation ${allocationId} is available...`);
+            
+            // Get all allocations to check availability
+            const allocationsResponse = await axios.get(`${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (allocationsResponse.data && allocationsResponse.data.data) {
+                const allocation = allocationsResponse.data.data.find(alloc => 
+                    alloc.attributes && alloc.attributes.id === parseInt(allocationId)
+                );
+                
+                if (!allocation) {
+                    throw new Error(`Allocation ${allocationId} not found`);
+                }
+                
+                if (allocation.attributes.assigned) {
+                    console.log(`[GameServerManager] ⚠️ Allocation ${allocationId} is already assigned to server ${allocation.attributes.server}`);
+                    throw new Error(`Allocation ${allocationId} is already assigned`);
+                }
+                
+                console.log(`[GameServerManager] ✅ Allocation ${allocationId} is available for assignment`);
+                return allocation.attributes;
+            }
+            
+            throw new Error('Could not retrieve allocations');
+            
+        } catch (error) {
+            console.error(`[GameServerManager] ❌ Error verifying allocation: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Find any available (unassigned) allocation
+     */
+    async findAvailableAllocation() {
+        const apiKey = this.pterodactylConfig.adminApiKey || this.pterodactylConfig.apiKey;
+        
+        try {
+            console.log(`[GameServerManager] 🔍 Finding available allocation...`);
+            
+            const allocationsResponse = await axios.get(`${this.pterodactylConfig.apiUrl}/application/nodes/1/allocations`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (allocationsResponse.data && allocationsResponse.data.data) {
+                // Find first unassigned allocation
+                const availableAllocation = allocationsResponse.data.data.find(alloc => 
+                    alloc.attributes && !alloc.attributes.assigned
+                );
+                
+                if (availableAllocation) {
+                    console.log(`[GameServerManager] ✅ Found available allocation: ${availableAllocation.attributes.id} (port ${availableAllocation.attributes.port})`);
+                    return {
+                        id: availableAllocation.attributes.id,
+                        port: availableAllocation.attributes.port,
+                        ip: availableAllocation.attributes.ip
+                    };
+                }
+            }
+            
+            throw new Error('No available allocations found - create more allocations in Pterodactyl Panel');
+            
+        } catch (error) {
+            console.error(`[GameServerManager] ❌ Error finding allocation: ${error.message}`);
+            throw error;
+        }
     }
 
     /**

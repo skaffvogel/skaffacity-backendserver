@@ -367,18 +367,36 @@ class GameServerCommand {
                 const GameServerManager = require('../managers/GameServerManager');
                 const manager = new GameServerManager();
                 
-                // Temporarily override the egg ID
-                const originalEggId = manager.pterodactylConfig.gameServerEggId;
+                // Override configuration for SkaffaCity Unity Server
                 manager.pterodactylConfig.gameServerEggId = targetEggId;
+                
+                // Force Unity server template configuration
+                manager.unityServerTemplate = {
+                    egg: parseInt(targetEggId),
+                    docker_image: 'ghcr.io/pterodactyl/yolks:ubuntu',
+                    startup: './{{SERVER_JARFILE}} -batchmode -nographics -port {{SERVER_PORT}} -masterServer {{MASTER_SERVER_URL}} -serverName "{{SERVER_NAME}}" -maxPlayers {{MAX_PLAYERS}} -tickRate {{TICK_RATE}} -logFile logs/server.log -region {{REGION}} -gameMode {{GAME_MODE}} -autoUpdate {{AUTO_UPDATE}}',
+                    description: 'SkaffaCity Unity Dedicated Server - Auto-updating from GitHub',
+                    limits: {
+                        memory: 2048, // 2GB for Unity server
+                        swap: 0,
+                        disk: 5120, // 5GB for Unity build
+                        io: 500,
+                        cpu: 200, // 200% CPU for Unity performance
+                        threads: null
+                    },
+                    feature_limits: {
+                        databases: 0,
+                        allocations: 1,
+                        backups: 1
+                    }
+                };
                 
                 console.log(`[GAMESERVER] 🥚 Using egg ID: ${targetEggId} (SkaffaCity Unity Server)`);
                 console.log(`[GAMESERVER] 🐙 Creating with GitHub auto-update enabled`);
                 console.log(`[GAMESERVER] 📦 Repository: skaffvogel/skaffacity-serverbuild`);
+                console.log(`[GAMESERVER] 🔧 Unity optimized: 2GB RAM, 5GB Disk, 200% CPU`);
                 
-                const newServer = await manager.createServer();
-                
-                // Restore original egg ID
-                manager.pterodactylConfig.gameServerEggId = originalEggId;
+                const newServer = await manager.createServerWithTemplate(manager.unityServerTemplate);
                 
                 console.log(`[GAMESERVER] ✅ SkaffaCity Unity Server created successfully!`);
                 console.log(`[GAMESERVER] 🆔 Server ID: ${newServer.id || newServer.uuid || 'Unknown'}`);
@@ -387,8 +405,11 @@ class GameServerCommand {
                     console.log(`[GAMESERVER] 📛 Server Name: ${newServer.name}`);
                 }
                 
-                // Show server details
-                await this.showServerDetails(newServer);
+                // Show server connection info
+                console.log(`[GAMESERVER] 🌐 Server IP: 207.180.235.41:${newServer.port || '7001'}`);
+                console.log(`[GAMESERVER] 📊 Master Server: http://207.180.235.41:3000`);
+                console.log(`[GAMESERVER] 🎮 Max Players: 50`);
+                console.log(`[GAMESERVER] ⚡ Tick Rate: 30 Hz`);
                 
             } else {
                 console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
@@ -398,6 +419,10 @@ class GameServerCommand {
         } catch (error) {
             console.error('[GAMESERVER] ❌ Failed to create server:', error.message);
             console.log(`[GAMESERVER] 💡 Make sure egg ID ${targetEggId} exists in Pterodactyl Panel`);
+            
+            if (error.message.includes('allocation')) {
+                console.log(`[GAMESERVER] 🔧 Allocation issue - check Pterodactyl node allocations`);
+            }
         }
     }
 
