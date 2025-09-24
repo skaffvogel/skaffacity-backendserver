@@ -11,6 +11,7 @@ class ConfigManager {
         this.configPath = path.join(__dirname, 'config.json');
         this.config = null;
         this.serverConfig = null;
+        this.changeCallbacks = [];
         this.loadConfig();
         
         // Watch for config file changes
@@ -54,6 +55,10 @@ class ConfigManager {
             };
             
             console.log('[CONFIG] ✅ Configuration loaded successfully');
+            
+            // Trigger change callbacks
+            this.notifyChanges();
+            
             return true;
         } catch (error) {
             console.error('[CONFIG] ❌ Failed to load configuration:', error.message);
@@ -267,6 +272,34 @@ class ConfigManager {
             valid: errors.length === 0,
             errors: errors
         };
+    }
+
+    /**
+     * Register callback voor configuratie wijzigingen
+     */
+    onChange(callback) {
+        this.changeCallbacks.push(callback);
+    }
+
+    /**
+     * Notify all registered callbacks
+     */
+    notifyChanges() {
+        for (const callback of this.changeCallbacks) {
+            try {
+                callback(this.config, this.serverConfig);
+            } catch (error) {
+                console.error('[CONFIG] ❌ Error in change callback:', error.message);
+            }
+        }
+    }
+
+    /**
+     * Get live server configuration (always current)
+     */
+    getLiveServerConfig() {
+        // Always return the most current server config
+        return this.getServerConfig();
     }
 }
 

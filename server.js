@@ -81,6 +81,38 @@ try {
     console.log('[ERROR] 💡 Fix config.json en herstart voor volledige functionaliteit');
 }
 
+// Functie om altijd de huidige configuratie op te halen
+function getCurrentServerConfig() {
+    if (global.configManager) {
+        const currentConfig = global.configManager.getServerConfig();
+        if (currentConfig) {
+            return currentConfig;
+        }
+    }
+    return serverConfig; // Fallback naar startup config
+}
+
+// Maak functie globaal beschikbaar
+global.getCurrentServerConfig = getCurrentServerConfig;
+
+// Setup config change listener voor runtime updates
+if (global.configManager) {
+    global.configManager.onChange((newConfig, newServerConfig) => {
+        console.log('\n🔄 [SERVER] Configuration updated, applying runtime changes...');
+        
+        // Update global references
+        config = newConfig;
+        serverConfig = newServerConfig;
+        
+        console.log('✅ [SERVER] Runtime configuration updated:');
+        console.log(`   - Port: ${newServerConfig.port}`);
+        console.log(`   - HTTPS Port: ${newServerConfig.httpsPort}`);
+        console.log(`   - Host: ${newServerConfig.host}`);
+        console.log(`   - HTTPS Enabled: ${newServerConfig.enableHTTPS}`);
+        console.log('💡 [SERVER] Some changes may require restart for full effect\n');
+    });
+}
+
 console.log('[MODULE] Database connectie laden...');
 const db = require('./utils/db');
 console.log('[MODULE] Database connectie geladen!');
@@ -255,6 +287,13 @@ if (gameServerRoutes) {
 } else {
     console.warn('[MODULE] ⚠️ Game Server endpoints overgeslagen (dependencies ontbreken)');
 }
+
+// Configuration API routes
+console.log('[MODULE] Config routes laden...');
+const configRoutes = require('./api/config.routes');
+console.log('[MODULE] Config routes geladen!');
+console.log('[MODULE] Config endpoints registreren op', `${apiPrefix}/config`);
+app.use(`${apiPrefix}/config`, configRoutes);
 
 console.log('[MODULE] Alle API routes geregistreerd!');
 
