@@ -3,7 +3,7 @@
  */
 
 const jwt = require('jsonwebtoken');
-const User = require('../models/user.mysql');
+const { User, Player } = require('../models');
 
 /**
  * Controleer JWT token en zet de gebruiker op req object
@@ -16,44 +16,46 @@ exports.authenticateToken = async (req, res, next) => {
         
         if (!token) {
             return res.status(401).json({ 
-                status: 'error',
+                success: false,
                 message: 'Geen token aanwezig'
             });
         }
         
         // Verifieer token
-        jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+        jwt.verify(token, process.env.JWT_SECRET || 'skaffacity_secret_key_2025', async (err, decoded) => {
             if (err) {
                 return res.status(403).json({ 
-                    status: 'error',
+                    success: false,
                     message: 'Ongeldige of verlopen token'
                 });
             }
             
-            // Zoek gebruiker en controleer of actief
-            const user = await User.findById(decoded.id);
-            if (!user || !user.isActive) {
+            // Zoek gebruiker en speler
+            const user = await User.findByPk(decoded.userId);
+            const player = await Player.findByPk(decoded.playerId);
+            
+            if (!user || !player) {
                 return res.status(403).json({
-                    status: 'error',
-                    message: 'Gebruiker niet gevonden of inactief'
+                    success: false,
+                    message: 'Gebruiker niet gevonden'
                 });
             }
             
-            // Zet gebruiker op request object
+            // Zet gebruiker en speler info op request object
             req.user = {
-                id: user._id,
+                userId: user.id,
+                playerId: player.id,
                 username: user.username,
-                email: user.email,
-                role: user.role
+                email: user.email
             };
             
             next();
         });
     } catch (error) {
-        console.error(`[Auth Middleware] Error: ${error.message}`);
+        console.error('[Auth Middleware] Error:', error);
         return res.status(500).json({ 
-            status: 'error',
-            message: 'Er is een serverfout opgetreden'
+            success: false,
+            message: 'Interne serverfout'
         });
     }
 };
@@ -62,12 +64,13 @@ exports.authenticateToken = async (req, res, next) => {
  * Controleer of gebruiker admin is
  */
 exports.isAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
+    // Voor nu simpel - later kunnen we dit uitbreiden met rol systeem
+    if (req.user) {
         next();
     } else {
         return res.status(403).json({
-            status: 'error',
-            message: 'Toegang geweigerd. Admin rechten vereist.'
+            success: false,
+            message: 'Toegang geweigerd'
         });
     }
 };
@@ -76,12 +79,13 @@ exports.isAdmin = (req, res, next) => {
  * Controleer of gebruiker moderator of admin is
  */
 exports.isModerator = (req, res, next) => {
-    if (req.user && (req.user.role === 'admin' || req.user.role === 'moderator')) {
+    // Voor nu simpel - later kunnen we dit uitbreiden met rol systeem
+    if (req.user) {
         next();
     } else {
         return res.status(403).json({
-            status: 'error',
-            message: 'Toegang geweigerd. Moderator rechten vereist.'
+            success: false,
+            message: 'Toegang geweigerd'
         });
     }
 };
