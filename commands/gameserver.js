@@ -88,8 +88,8 @@ class GameServerCommand {
             console.log('╚══════════════════════════════════════════════════════════╝\n');
             
         } catch (error) {
-            console.log('[GAMESERVER] ❌ Pterodactyl integration not available');
-            console.log('[GAMESERVER] 💡 Install axios dependency: npm install axios');
+            console.log('[GAMESERVER] ❌ Pterodactyl integration error:', error.message);
+            console.log('[GAMESERVER] 💡 Check your Pterodactyl configuration');
         }
     }
 
