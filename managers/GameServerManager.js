@@ -495,6 +495,67 @@ class GameServerManager {
     }
 
     /**
+     * Create a new server (alias for createGameServer)
+     */
+    async createServer() {
+        return await this.createGameServer();
+    }
+
+    /**
+     * Check Pterodactyl connection (alias for testPterodactylConnection)
+     */
+    async checkPterodactylConnection() {
+        try {
+            await this.testPterodactylConnection();
+            return { status: 'connected', message: 'Pterodactyl API connection successful' };
+        } catch (error) {
+            return { status: 'error', message: error.message };
+        }
+    }
+
+    /**
+     * Scale servers to target count
+     */
+    async scaleServers(targetCount) {
+        console.log(`[GameServerManager] Scaling to ${targetCount} servers...`);
+        
+        const currentServers = await this.listServers();
+        const currentCount = currentServers.length;
+        
+        if (targetCount > currentCount) {
+            // Scale up - create new servers
+            const serversToCreate = targetCount - currentCount;
+            console.log(`[GameServerManager] Creating ${serversToCreate} new servers...`);
+            
+            for (let i = 0; i < serversToCreate; i++) {
+                try {
+                    await this.createGameServer();
+                    console.log(`[GameServerManager] ✅ Server ${i + 1}/${serversToCreate} created`);
+                } catch (error) {
+                    console.error(`[GameServerManager] ❌ Failed to create server ${i + 1}: ${error.message}`);
+                }
+            }
+        } else if (targetCount < currentCount) {
+            // Scale down - stop excess servers
+            const serversToStop = currentCount - targetCount;
+            console.log(`[GameServerManager] Stopping ${serversToStop} servers...`);
+            
+            for (let i = 0; i < serversToStop && i < currentServers.length; i++) {
+                try {
+                    await this.stopServer(currentServers[i].attributes.id);
+                    console.log(`[GameServerManager] ✅ Server ${i + 1}/${serversToStop} stopped`);
+                } catch (error) {
+                    console.error(`[GameServerManager] ❌ Failed to stop server: ${error.message}`);
+                }
+            }
+        } else {
+            console.log(`[GameServerManager] Already at target count: ${targetCount}`);
+        }
+        
+        return { targetCount, currentCount, action: targetCount > currentCount ? 'scaled_up' : targetCount < currentCount ? 'scaled_down' : 'no_change' };
+    }
+
+    /**
      * Get server info from local servers map
      */
     getLocalServers() {
