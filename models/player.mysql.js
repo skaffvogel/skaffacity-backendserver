@@ -4,7 +4,7 @@
  */
 
 const { v4: uuidv4 } = require('uuid');
-const db = require('./utils/db');
+const db = require('../utils/db');
 const User = require('./user.mysql');
 
 class Player {

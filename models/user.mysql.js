@@ -5,8 +5,13 @@
 
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-const db = require('./utils/db');
-const config = require('./config/config.json');
+const db = require('../utils/db');
+let config;
+try {
+    config = require('../config/config.json');
+} catch (error) {
+    config = { auth: { saltRounds: 10 } };
+}
 
 class User {
   constructor(data = {}) {
