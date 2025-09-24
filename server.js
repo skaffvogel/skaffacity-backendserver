@@ -27,22 +27,59 @@ console.log('[MODULE] Command handler geladen!');
 
 // Server configuratie laden via ConfigManager
 console.log('[MODULE] Server configuratie laden...');
-const configManager = require('./utils/config-manager');
-const config = configManager.getConfig();
-const serverConfig = configManager.getServerConfig();
+let config, serverConfig, configManager;
 
-console.log('[MODULE] Server configuratie geladen!', {
-    port: serverConfig.port,
-    httpsPort: serverConfig.httpsPort,
-    host: serverConfig.host,
-    apiPrefix: serverConfig.apiPrefix,
-    enableHTTPS: serverConfig.enableHTTPS,
-    sslKeyPath: serverConfig.enableHTTPS ? serverConfig.sslKeyPath : 'N/A',
-    sslCertPath: serverConfig.enableHTTPS ? serverConfig.sslCertPath : 'N/A'
-});
-
-// Maak config manager beschikbaar voor commands
-global.configManager = configManager;
+try {
+    configManager = require('./utils/config-manager');
+    config = configManager.getConfig();
+    serverConfig = configManager.getServerConfig();
+    
+    // Controleer of configuratie geldig is geladen
+    if (!config || !serverConfig) {
+        throw new Error('Configuration is null or undefined');
+    }
+    
+    console.log('[MODULE] Server configuratie geladen!', {
+        port: serverConfig.port,
+        httpsPort: serverConfig.httpsPort,
+        host: serverConfig.host,
+        apiPrefix: serverConfig.apiPrefix,
+        enableHTTPS: serverConfig.enableHTTPS,
+        sslKeyPath: serverConfig.enableHTTPS ? serverConfig.sslKeyPath : 'N/A',
+        sslCertPath: serverConfig.enableHTTPS ? serverConfig.sslCertPath : 'N/A'
+    });
+    
+    // Maak config manager beschikbaar voor commands
+    global.configManager = configManager;
+    
+} catch (error) {
+    console.error('[ERROR] ❌ Configuratie laden mislukt:', error.message);
+    console.log('[ERROR] 🔧 Probeer fallback configuratie...');
+    
+    // Fallback configuratie
+    serverConfig = {
+        port: 8000,
+        httpsPort: 8443,
+        host: '0.0.0.0',
+        apiPrefix: '/api/v1',
+        enableHTTPS: false,
+        sslKeyPath: path.join(__dirname, '../ssl/private-key.pem'),
+        sslCertPath: path.join(__dirname, '../ssl/certificate.pem')
+    };
+    
+    config = {
+        server: serverConfig,
+        database: {
+            host: '207.180.235.41',
+            port: 3306,
+            database: 's14_skaffacity',
+            username: 'u14_Sz62GJBI8E'
+        }
+    };
+    
+    console.log('[ERROR] ✅ Fallback configuratie geladen');
+    console.log('[ERROR] 💡 Fix config.json en herstart voor volledige functionaliteit');
+}
 
 console.log('[MODULE] Database connectie laden...');
 const db = require('./utils/db');

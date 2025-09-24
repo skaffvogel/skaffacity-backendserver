@@ -23,26 +23,106 @@ class ConfigManager {
     loadConfig() {
         try {
             console.log('[CONFIG] Loading configuration...');
+            
+            // Controleer of config bestand bestaat
+            if (!fs.existsSync(this.configPath)) {
+                console.log('[CONFIG] ❌ Config file does not exist, creating default...');
+                this.createDefaultConfig();
+            }
+            
             const rawData = fs.readFileSync(this.configPath, 'utf8');
             this.config = JSON.parse(rawData);
             
-            // Update server config
+            // Valideer config structuur
+            if (!this.config.server) {
+                throw new Error('Missing server configuration section');
+            }
+            
+            if (!this.config.ssl) {
+                throw new Error('Missing SSL configuration section');
+            }
+            
+            // Update server config met defaults voor ontbrekende velden
             this.serverConfig = {
-                port: this.config.server.port,
-                httpsPort: this.config.server.httpsPort,
-                host: this.config.server.host,
-                apiPrefix: this.config.server.apiPrefix,
-                enableHTTPS: this.config.server.enableHTTPS,
-                sslKeyPath: path.join(__dirname, this.config.ssl.keyPath),
-                sslCertPath: path.join(__dirname, this.config.ssl.certPath)
+                port: this.config.server.port || 8000,
+                httpsPort: this.config.server.httpsPort || 8443,
+                host: this.config.server.host || '0.0.0.0',
+                apiPrefix: this.config.server.apiPrefix || '/api/v1',
+                enableHTTPS: this.config.server.enableHTTPS || false,
+                sslKeyPath: path.join(__dirname, this.config.ssl.keyPath || '../ssl/private-key.pem'),
+                sslCertPath: path.join(__dirname, this.config.ssl.certPath || '../ssl/certificate.pem')
             };
             
             console.log('[CONFIG] ✅ Configuration loaded successfully');
             return true;
         } catch (error) {
             console.error('[CONFIG] ❌ Failed to load configuration:', error.message);
-            return false;
+            console.log('[CONFIG] 🔧 Attempting to create default configuration...');
+            
+            try {
+                this.createDefaultConfig();
+                return this.loadConfig(); // Probeer opnieuw na het maken van default config
+            } catch (createError) {
+                console.error('[CONFIG] ❌ Failed to create default config:', createError.message);
+                return false;
+            }
         }
+    }
+
+    /**
+     * Maak default configuratie bestand
+     */
+    createDefaultConfig() {
+        const defaultConfig = {
+            "server": {
+                "port": 8000,
+                "httpsPort": 8443,
+                "host": "0.0.0.0",
+                "apiPrefix": "/api/v1",
+                "enableHTTPS": false
+            },
+            "ssl": {
+                "keyPath": "../ssl/private-key.pem",
+                "certPath": "../ssl/certificate.pem"
+            },
+            "database": {
+                "host": "207.180.235.41",
+                "port": 3306,
+                "database": "s14_skaffacity",
+                "username": "u14_Sz62GJBI8E"
+            },
+            "gameServer": {
+                "pterodactyl": {
+                    "enabled": false,
+                    "apiUrl": "",
+                    "apiKey": "",
+                    "serverId": ""
+                },
+                "maxServers": 5,
+                "autoScale": true,
+                "serverTemplate": {
+                    "name": "SkaffaCity-GameServer",
+                    "egg": 5,
+                    "docker_image": "ghcr.io/pterodactyl/yolks:nodejs_18",
+                    "startup": "node gameserver.js"
+                }
+            },
+            "security": {
+                "jwtSecret": "your-jwt-secret-key",
+                "bcryptRounds": 10,
+                "rateLimitWindowMs": 900000,
+                "rateLimitMax": 100
+            },
+            "logging": {
+                "level": "info",
+                "enableConsole": true,
+                "enableFile": true,
+                "logDirectory": "./logs"
+            }
+        };
+        
+        fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+        console.log('[CONFIG] ✅ Default configuration file created');
     }
 
     /**
@@ -72,17 +152,24 @@ class ConfigManager {
      */
     setupFileWatcher() {
         try {
-            fs.watchFile(this.configPath, { interval: 1000 }, (curr, prev) => {
-                if (curr.mtime > prev.mtime) {
-                    console.log('\n🔄 [CONFIG] Configuration file changed, reloading...');
-                    const success = this.reloadConfig();
-                    if (success) {
-                        console.log('✅ [CONFIG] Live configuration update applied!');
-                        console.log('💡 [CONFIG] Some changes may require server restart\n');
+            // Alleen file watcher opzetten als bestand bestaat
+            if (fs.existsSync(this.configPath)) {
+                fs.watchFile(this.configPath, { interval: 1000 }, (curr, prev) => {
+                    if (curr.mtime > prev.mtime) {
+                        console.log('\n🔄 [CONFIG] Configuration file changed, reloading...');
+                        const success = this.reloadConfig();
+                        if (success) {
+                            console.log('✅ [CONFIG] Live configuration update applied!');
+                            console.log('💡 [CONFIG] Some changes may require server restart\n');
+                        } else {
+                            console.log('❌ [CONFIG] Failed to reload configuration\n');
+                        }
                     }
-                }
-            });
-            console.log('[CONFIG] 👀 File watcher active for automatic config reload');
+                });
+                console.log('[CONFIG] 👀 File watcher active for automatic config reload');
+            } else {
+                console.log('[CONFIG] ⚠️ Config file not found, skipping file watcher setup');
+            }
         } catch (error) {
             console.warn('[CONFIG] ⚠️ Could not setup file watcher:', error.message);
         }
@@ -92,6 +179,10 @@ class ConfigManager {
      * Get current configuration
      */
     getConfig() {
+        if (!this.config) {
+            console.warn('[CONFIG] ⚠️ Configuration not loaded, attempting to load...');
+            this.loadConfig();
+        }
         return this.config;
     }
 
@@ -99,6 +190,10 @@ class ConfigManager {
      * Get server configuration
      */
     getServerConfig() {
+        if (!this.serverConfig) {
+            console.warn('[CONFIG] ⚠️ Server configuration not loaded, attempting to load...');
+            this.loadConfig();
+        }
         return this.serverConfig;
     }
 
