@@ -29,6 +29,7 @@ const inventoryRoutes = require('./api/inventory.routes');
 const safeZoneRoutes = require('./api/safezone.routes');
 const cosmeticsRoutes = require('./api/cosmetics.routes');
 const ovenRoutes = require('./api/oven.routes');
+const serversRoutes = require('./api/servers.routes');
 
 // Load environment variables
 dotenv.config();
@@ -73,13 +74,35 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' })); // Verhoog limiet indien nodig voor grote payloads
 app.use(express.urlencoded({ extended: true }));
 
-// Simple health check route
+// Enhanced health check route with server info
 app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'UP',
-        timestamp: new Date(),
-        uptime: process.uptime()
-    });
+    const { type } = req.query;
+    
+    if (type === 'gameserver') {
+        // Enhanced health check for game servers
+        res.status(200).json({
+            status: 'UP',
+            type: 'SkaffaCity Master Server',
+            version: '1.0.0',
+            timestamp: new Date(),
+            uptime: process.uptime(),
+            endpoints: {
+                discovery: '/api/v1/servers/discover',
+                register: '/api/v1/servers/register',
+                heartbeat: '/api/v1/servers/heartbeat',
+                config: '/api/v1/servers/config/{serverId}',
+                status: '/api/v1/servers/status'
+            },
+            environment: process.env.NODE_ENV || 'development'
+        });
+    } else {
+        // Standard health check
+        res.status(200).json({
+            status: 'UP',
+            timestamp: new Date(),
+            uptime: process.uptime()
+        });
+    }
 });
 
 // API routes
@@ -91,6 +114,7 @@ app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/safezones', safeZoneRoutes);
 app.use('/api/v1/cosmetics', cosmeticsRoutes);
 app.use('/api/v1/oven', ovenRoutes);
+app.use('/api/v1/servers', serversRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -418,13 +418,8 @@ class GameServerCommand {
                         AUTO_UPDATE: '1',
                         AUTO_RESTART: '1',
                         DEBUG_MODE: '0',
-                        SKAFFA_SERVER_ID: 'server-7001',
-                        SKAFFA_SERVER_PORT: '7001',
-                        SKAFFA_MAX_PLAYERS: '50',
-                        SKAFFA_TICK_RATE: '30',
-                        SKAFFA_GAME_MODE: 'standard',
-                        SKAFFA_MAP_NAME: 'SkaffaCity_Default',
-                        SKAFFA_ALLOW_INSECURE: 'true'
+                        // Minimal environment variables - configuration via API
+                        DEBUG_MODE: '0'
                     }
                 };
                 

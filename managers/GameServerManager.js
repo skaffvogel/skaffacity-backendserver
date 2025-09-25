@@ -254,13 +254,8 @@ class GameServerManager {
                     SKAFFA_CREATED_BY: 'GameServerManager',
                     SKAFFA_CREATED_AT: new Date().toISOString(),
                     
-                    // Unity Server Environment Variables (required by new environment-only config)
-                    SKAFFA_SERVER_PORT: allocation.port.toString(),
-                    SKAFFA_MAX_PLAYERS: serverTemplate.environment?.SKAFFA_MAX_PLAYERS || serverTemplate.environment?.MAX_PLAYERS || this.serverConfig.maxPlayersPerServer.toString(),
-                    SKAFFA_TICK_RATE: serverTemplate.environment?.SKAFFA_TICK_RATE || serverTemplate.environment?.TICK_RATE || '30',
-                    SKAFFA_GAME_MODE: serverTemplate.environment?.SKAFFA_GAME_MODE || serverTemplate.environment?.GAME_MODE || 'standard',
-                    SKAFFA_MAP_NAME: serverTemplate.environment?.SKAFFA_MAP_NAME || 'SkaffaCity_Default',
-                    SKAFFA_ALLOW_INSECURE: serverTemplate.environment?.SKAFFA_ALLOW_INSECURE || 'true',
+                    // Essential environment variables only (configuration comes from API)
+                    SERVER_PORT: allocation.port.toString(),
                     
                     // Spread any additional environment variables from template
                     ...(serverTemplate.environment || {})
