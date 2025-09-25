@@ -403,7 +403,7 @@ class GameServerCommand {
                     },
                     environment: {
                         SERVER_JARFILE: 'SkaffaCityServer',
-                        MASTER_SERVER_URL: 'https://panel.lvlagency.nl:25566',
+                        MASTER_SERVER_URL: 'http://207.180.235.41:3000',
                         DEBUG_MODE: '0'
                     }
                 };
