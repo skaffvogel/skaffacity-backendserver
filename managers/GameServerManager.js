@@ -225,7 +225,7 @@ class GameServerManager {
                 environment: {
                     // SkaffaCity Unity Server Egg Variables
                     SERVER_JARFILE: serverTemplate.environment?.SERVER_JARFILE || 'auto-detect',
-                    MASTER_SERVER_URL: serverTemplate.environment?.MASTER_SERVER_URL || process.env.MASTER_SERVER_URL || 'https://panel.lvlagency.nl:25566',
+                    MASTER_SERVER_URL: serverTemplate.environment?.MASTER_SERVER_URL || process.env.MASTER_SERVER_URL || 'http://panel.lvlagency.nl:25566',
                     SERVER_NAME: serverTemplate.environment?.SERVER_NAME || `SkaffaCity Server #${allocation.port}`,
                     MAX_PLAYERS: serverTemplate.environment?.MAX_PLAYERS || this.serverConfig.maxPlayersPerServer.toString(),
                     TICK_RATE: serverTemplate.environment?.TICK_RATE || '30',
