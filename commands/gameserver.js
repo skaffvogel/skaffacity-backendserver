@@ -386,7 +386,7 @@ class GameServerCommand {
                 manager.unityServerTemplate = {
                     egg: parseInt(targetEggId),
                     docker_image: 'ghcr.io/parkervcp/yolks:ubuntu',
-                    startup: './{{SERVER_JARFILE}} -batchmode -nographics -port {{SERVER_PORT}} -masterServer {{MASTER_SERVER_URL}} -serverName "{{SERVER_NAME}}" -maxPlayers {{MAX_PLAYERS}} -tickRate {{TICK_RATE}} -region {{REGION}} -gameMode {{GAME_MODE}}',
+                    startup: './{{SERVER_JARFILE}} -batchmode -nographics -port {{SERVER_PORT}}',
                     description: 'SkaffaCity Unity Dedicated Server - Auto-updating from GitHub',
                     limits: {
                         memory: 3072, // 3GB for Unity server (increased)
@@ -402,31 +402,16 @@ class GameServerCommand {
                         backups: 2
                     },
                     environment: {
-                        SERVER_JARFILE: 'auto-detect',
+                        SERVER_JARFILE: 'SkaffaCityServer',
                         MASTER_SERVER_URL: 'https://panel.lvlagency.nl:25566',
-                        SERVER_NAME: 'SkaffaCity Server #{{SERVER_PORT}}',
-                        MAX_PLAYERS: '50',
-                        TICK_RATE: '30',
-                        REGION: 'EU-West',
-                        GAME_MODE: 'standard',
-                        GIT_REPOSITORY: 'https://github.com/skaffvogel/skaffacity-serverbuild.git',
-                        GIT_BRANCH: 'main',
-                        GIT_ACCESS_TOKEN: '',
-                        GITHUB_REPO: 'skaffvogel/skaffacity-serverbuild',
-                        GITHUB_BRANCH: 'master',
-                        DOWNLOAD_URL: '',
-                        AUTO_UPDATE: '1',
-                        AUTO_RESTART: '1',
-                        DEBUG_MODE: '0',
-                        // Minimal environment variables - configuration via API
                         DEBUG_MODE: '0'
                     }
                 };
                 
                 console.log(`[GAMESERVER] 🥚 Using egg ID: ${targetEggId} (SkaffaCity Unity Server)`);
                 console.log(`[GAMESERVER] 🐙 Docker Image: ghcr.io/parkervcp/yolks:ubuntu`);
-                console.log(`[GAMESERVER] 📦 Git Repository: https://github.com/skaffvogel/skaffacity-serverbuild.git`);
-                console.log(`[GAMESERVER] 🌿 Git Branch: main`);
+                console.log(`[GAMESERVER] 🎯 Executable: SkaffaCityServer`);
+                console.log(`[GAMESERVER] � Master Server: https://panel.lvlagency.nl:25566`);
                 console.log(`[GAMESERVER] 🔧 Unity optimized: 3GB RAM, 8GB Disk, 300% CPU`);
                 
                 const newServer = await manager.createServerWithTemplate(manager.unityServerTemplate);
