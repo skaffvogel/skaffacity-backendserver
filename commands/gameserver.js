@@ -1,5 +1,42 @@
 ﻿/**
- * Game Server Management Command
+ * Game Ser    // Get gameserver config from global configManager (like config command does)
+    getGameserverConfig() {
+        if (global.configManager && global.configManager.getConfig) {
+            // Ensure gameserver config exists, create default if needed
+            this.ensureGameserverConfig();
+            return global.configManager.getConfig('gameserver');
+        }
+        console.log('[GAMESERVER] ❌ ConfigManager not available');
+        return null;
+    }
+
+    // Ensure gameserver config exists, create if missing
+    ensureGameserverConfig() {
+        try {
+            // Check if gameserver config already exists
+            const existingConfig = global.configManager.configs.get('gameserver');
+            if (existingConfig) {
+                return; // Config already loaded
+            }
+
+            // Try to load existing config file
+            const fs = require('fs');
+            const path = require('path');
+            const configPath = path.join(process.cwd(), 'src', 'config', 'gameserver.json');
+            
+            if (!fs.existsSync(configPath)) {
+                console.log('[GAMESERVER] 📁 gameserver.json not found, creating default configuration...');
+                // Trigger ConfigManager to create default config
+                global.configManager.loadConfig('gameserver', 'gameserver.json');
+                console.log('[GAMESERVER] ✅ Default gameserver.json created successfully');
+            } else {
+                // File exists but not loaded, load it
+                global.configManager.loadConfig('gameserver', 'gameserver.json');
+            }
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Error ensuring gameserver config:', error.message);
+        }
+    }gement Command
  * Beheert Pterodactyl game servers via hoofdserver command interface
  * Gebruikt het modulaire config systeem zoals config command
  */
@@ -348,7 +385,12 @@ class GameServerCommand {
                 validationResult.errors.forEach(error => {
                     console.log(`  - ${error}`);
                 });
-                console.log('[GAMESERVER] 💡 Please configure missing values before initializing');
+                console.log('');
+                console.log('[GAMESERVER] � Quick setup commands:');
+                console.log('[GAMESERVER] config set gameserver.pterodactyl.enabled true');
+                console.log('[GAMESERVER] config set gameserver.pterodactyl.apiUrl "https://panel.lvlagency.nl"');
+                console.log('[GAMESERVER] config set gameserver.pterodactyl.adminApiKey "ptla_xxxxx"');
+                console.log('');
                 await this.showConfig();
                 return;
             }
@@ -439,18 +481,24 @@ class GameServerCommand {
             
             console.log('╚══════════════════════════════════════════════════════════╝');
             console.log('');
-            console.log('[GAMESERVER] 💡 Fix these issues in gameserver.json and try again');
-            console.log('[GAMESERVER] 🔧 Use "config set <key> <value>" to update configuration');
-            console.log('[GAMESERVER] 📋 Example: config set gameserver.pterodactyl.apiUrl "https://panel.example.com"');
+            console.log('[GAMESERVER] � Setup commands to fix common issues:');
+            console.log('[GAMESERVER] config set gameserver.pterodactyl.enabled true');
+            console.log('[GAMESERVER] config set gameserver.pterodactyl.apiUrl "https://panel.lvlagency.nl"');
+            console.log('[GAMESERVER] config set gameserver.pterodactyl.adminApiKey "ptla_xxxxx"');
+            console.log('');
+            console.log('[GAMESERVER] 💡 Replace "ptla_xxxxx" with your actual Pterodactyl admin API key');
         }
     }
 
     validateGameserverConfig() {
+        // Ensure config exists before validation
+        this.ensureGameserverConfig();
+        
         const config = this.getGameserverConfig();
         const errors = [];
         
         if (!config) {
-            errors.push('gameserver.json file not found or not loaded');
+            errors.push('gameserver.json file could not be loaded or created');
             return { isValid: false, errors };
         }
         
@@ -542,6 +590,8 @@ class GameServerCommand {
         console.log('║                🔧 PTERODACTYL CONFIGURATION              ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
         
+        // Ensure config exists before showing it
+        this.ensureGameserverConfig();
         const config = this.getGameserverConfig();
         if (config && config.pterodactyl) {
             const ptero = config.pterodactyl;
@@ -591,6 +641,7 @@ class GameServerCommand {
         console.log('║ 📡 Managed via Pterodactyl Panel API                    ║');
         console.log('║ ⚙️  Use "gameserver config" to check configuration      ║');
         console.log('║ 🔍 Use "gameserver validate" to check config validity   ║');
+        console.log('║ 📁 Auto-creates gameserver.json if missing              ║');
         console.log('╚══════════════════════════════════════════════════════════╝');
     }
 
