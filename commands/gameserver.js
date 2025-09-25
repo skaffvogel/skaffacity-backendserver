@@ -386,7 +386,7 @@ class GameServerCommand {
                 manager.unityServerTemplate = {
                     egg: parseInt(targetEggId),
                     docker_image: 'ghcr.io/parkervcp/yolks:ubuntu',
-                    startup: './{{SERVER_JARFILE}} -batchmode -nographics -port {{SERVER_PORT}}',
+                    startup: 'MASTER_SERVER_URL={{MASTER_SERVER_URL}} ./{{SERVER_JARFILE}} -batchmode -nographics -port {{SERVER_PORT}}',
                     description: 'SkaffaCity Unity Dedicated Server - Auto-updating from GitHub',
                     limits: {
                         memory: 3072, // 3GB for Unity server (increased)
