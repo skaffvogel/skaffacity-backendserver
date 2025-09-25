@@ -403,13 +403,28 @@ class GameServerCommand {
                     },
                     environment: {
                         SERVER_JARFILE: 'auto-detect',
-                        MASTER_SERVER_URL: 'http://207.180.235.41:3000',
+                        MASTER_SERVER_URL: 'https://panel.lvlagency.nl:25566',
+                        SERVER_NAME: 'SkaffaCity Server #{{SERVER_PORT}}',
                         MAX_PLAYERS: '50',
                         TICK_RATE: '30',
                         REGION: 'EU-West',
                         GAME_MODE: 'standard',
                         GIT_REPOSITORY: 'https://github.com/skaffvogel/skaffacity-serverbuild.git',
-                        GIT_BRANCH: 'main'
+                        GIT_BRANCH: 'main',
+                        GIT_ACCESS_TOKEN: '',
+                        GITHUB_REPO: 'skaffvogel/skaffacity-serverbuild',
+                        GITHUB_BRANCH: 'master',
+                        DOWNLOAD_URL: '',
+                        AUTO_UPDATE: '1',
+                        AUTO_RESTART: '1',
+                        DEBUG_MODE: '0',
+                        SKAFFA_SERVER_ID: 'server-{{SERVER_PORT}}',
+                        SKAFFA_SERVER_PORT: '{{SERVER_PORT}}',
+                        SKAFFA_MAX_PLAYERS: '50',
+                        SKAFFA_TICK_RATE: '30',
+                        SKAFFA_GAME_MODE: 'standard',
+                        SKAFFA_MAP_NAME: 'SkaffaCity_Default',
+                        SKAFFA_ALLOW_INSECURE: 'true'
                     }
                 };
                 
@@ -430,11 +445,12 @@ class GameServerCommand {
                 
                 // Show server connection info
                 console.log(`[GAMESERVER] 🌐 Server IP: 207.180.235.41:${newServer.port || '7001'}`);
-                console.log(`[GAMESERVER] 📊 Master Server: http://207.180.235.41:3000`);
+                console.log(`[GAMESERVER] 📊 Master Server: https://panel.lvlagency.nl:25566`);
                 console.log(`[GAMESERVER] 🎮 Max Players: 50 | Region: EU-West`);
                 console.log(`[GAMESERVER] ⚡ Tick Rate: 30 Hz | Game Mode: standard`);
                 console.log(`[GAMESERVER] 🔄 Auto-update: Enabled from GitHub`);
                 console.log(`[GAMESERVER] 🚀 Server will auto-install and start from latest build`);
+                console.log(`[GAMESERVER] ✨ Configuration: Environment Variables Only (No Config Files)`);
                 
             } else {
                 console.log('[GAMESERVER] ❌ Pterodactyl integration disabled');
