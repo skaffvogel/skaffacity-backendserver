@@ -10,6 +10,9 @@ const GameServerManager = require('../managers/GameServerManager');
 // Initialize game server manager
 const gameServerManager = new GameServerManager();
 
+// Admin key for server management without authentication
+const ADMIN_KEY = process.env.GAMESERVER_ADMIN_KEY || 'skaffa-admin-2025';
+
 /**
  * @route   GET /api/v1/gameservers
  * @desc    Haal alle beschikbare game servers op
@@ -309,6 +312,115 @@ router.post('/:serverId/stop', async (req, res) => {
         res.status(500).json({
             status: 'error',
             message: error.message || 'Fout bij stoppen game server'
+        });
+    }
+});
+
+/**
+ * @route   POST /api/v1/gameservers/admin/create
+ * @desc    Admin endpoint - Maak nieuwe game server aan (zonder user auth)
+ * @access  Admin Key Required
+ */
+router.post('/admin/create', async (req, res) => {
+    try {
+        const { adminKey } = req.body;
+        
+        // Check admin key
+        if (adminKey !== ADMIN_KEY) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Invalid admin key'
+            });
+        }
+
+        const newServer = await gameServerManager.createGameServer();
+        
+        res.json({
+            status: 'success',
+            message: 'Game server succesvol aangemaakt via admin endpoint',
+            data: newServer
+        });
+    } catch (error) {
+        console.error('[GameServerAPI] Admin create error:', error.message);
+        res.status(500).json({
+            status: 'error',
+            message: error.message || 'Fout bij aanmaken game server'
+        });
+    }
+});
+
+/**
+ * @route   POST /api/v1/gameservers/admin/start
+ * @desc    Admin endpoint - Start game server (zonder user auth)
+ * @access  Admin Key Required
+ */
+router.post('/admin/start', async (req, res) => {
+    try {
+        const { adminKey, serverId } = req.body;
+        
+        // Check admin key
+        if (adminKey !== ADMIN_KEY) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Invalid admin key'
+            });
+        }
+
+        if (!serverId) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Server ID is vereist'
+            });
+        }
+
+        await gameServerManager.startServer(serverId);
+        
+        res.json({
+            status: 'success',
+            message: `Game server ${serverId} wordt gestart via admin endpoint`
+        });
+    } catch (error) {
+        console.error('[GameServerAPI] Admin start error:', error.message);
+        res.status(500).json({
+            status: 'error',
+            message: error.message || 'Fout bij starten game server'
+        });
+    }
+});
+
+/**
+ * @route   GET /api/v1/gameservers/admin/status
+ * @desc    Admin endpoint - Haal alle server status op (zonder user auth)  
+ * @access  Admin Key Required
+ */
+router.get('/admin/status', async (req, res) => {
+    try {
+        const { adminKey } = req.query;
+        
+        // Check admin key
+        if (adminKey !== ADMIN_KEY) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Invalid admin key'
+            });
+        }
+
+        const servers = gameServerManager.getAllServers();
+        
+        res.json({
+            status: 'success',
+            message: 'Server status opgehaald via admin endpoint',
+            data: {
+                servers: servers,
+                totalServers: servers.length,
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('[GameServerAPI] Admin status error:', error.message);
+        res.status(500).json({
+            status: 'error',
+            message: error.message || 'Fout bij ophalen server status'
         });
     }
 });

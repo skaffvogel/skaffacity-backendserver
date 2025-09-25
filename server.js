@@ -367,7 +367,10 @@ try {
 
 if (gameServerRoutes) {
     console.log('[MODULE] Game Server endpoints registreren op', `${apiPrefix}/gameservers`);
+    // Regular gameserver routes (met authenticatie)
     app.use(`${apiPrefix}/gameservers`, authenticateToken, gameServerRoutes);
+    // Admin gameserver routes (zonder authenticatie, maar met admin key check)
+    console.log('[MODULE] Game Server admin endpoints registreren op', `${apiPrefix}/gameservers/admin`);
 } else {
     console.warn('[MODULE] ⚠️ Game Server endpoints overgeslagen (dependencies ontbreken)');
 }

@@ -14,7 +14,7 @@ class SkaffaCityGameServer extends EventEmitter {
         this.config = {
             serverId: process.env.GAME_SERVER_ID || 'gameserver-' + Date.now(),
             port: parseInt(process.env.GAME_SERVER_PORT) || 7001,
-            masterServerUrl: process.env.MASTER_SERVER_URL || 'https://localhost:8443',
+            masterServerUrl: process.env.MASTER_SERVER_URL || 'http://localhost:8000',
             maxPlayers: parseInt(process.env.MAX_PLAYERS) || 50,
             tickRate: parseInt(process.env.TICK_RATE) || 20, // 20 Hz
             worldSize: { x: 2000, y: 2000, z: 2000 },
