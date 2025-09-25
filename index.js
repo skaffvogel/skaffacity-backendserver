@@ -30,6 +30,7 @@ const safeZoneRoutes = require('./api/safezone.routes');
 const cosmeticsRoutes = require('./api/cosmetics.routes');
 const ovenRoutes = require('./api/oven.routes');
 const serversRoutes = require('./api/servers.routes');
+const clientRoutes = require('./api/client.routes');
 
 // Load environment variables
 dotenv.config();
@@ -115,6 +116,7 @@ app.use('/api/v1/safezones', safeZoneRoutes);
 app.use('/api/v1/cosmetics', cosmeticsRoutes);
 app.use('/api/v1/oven', ovenRoutes);
 app.use('/api/v1/servers', serversRoutes);
+app.use('/api/v1/client', clientRoutes);
 
 // 404 handler
 app.use((req, res) => {
