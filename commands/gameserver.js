@@ -1,5 +1,19 @@
 ﻿/**
- * Game Ser    // Get gameserver config from global configManager (like config command does)
+ * Game Server Management Command
+ * Beheert Pterodactyl game servers via hoofdserver command interface
+ * Gebruikt het modulaire config systeem zoals config command
+ */
+
+const GameServerManager = require('../managers/GameServerManager');
+
+class GameServerCommand {
+    constructor() {
+        this.description = 'Manage Pterodactyl game servers for SkaffaCity';
+        this.usage = 'gameserver <create|start|stop|restart|delete|list|status|info>';
+        this.gameServerManager = new GameServerManager();
+    }
+
+    // Get gameserver config from global configManager (like config command does)
     getGameserverConfig() {
         if (global.configManager && global.configManager.getConfig) {
             // Ensure gameserver config exists, create default if needed
@@ -36,27 +50,6 @@
         } catch (error) {
             console.error('[GAMESERVER] ❌ Error ensuring gameserver config:', error.message);
         }
-    }gement Command
- * Beheert Pterodactyl game servers via hoofdserver command interface
- * Gebruikt het modulaire config systeem zoals config command
- */
-
-const GameServerManager = require('../managers/GameServerManager');
-
-class GameServerCommand {
-    constructor() {
-        this.description = 'Manage Pterodactyl game servers for SkaffaCity';
-        this.usage = 'gameserver <create|start|stop|restart|delete|list|status|info>';
-        this.gameServerManager = new GameServerManager();
-    }
-
-    // Get gameserver config from global configManager (like config command does)
-    getGameserverConfig() {
-        if (global.configManager && global.configManager.getConfig) {
-            return global.configManager.getConfig('gameserver');
-        }
-        console.log('[GAMESERVER]  ConfigManager not available');
-        return null;
     }
 
     async execute(args) {
