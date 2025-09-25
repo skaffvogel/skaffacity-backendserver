@@ -1,6 +1,68 @@
 /**
  * Game Server Management Command
- * Beheert Pterodactyl game servers via hoofds    async createServer(serverName = 'SkaffaCity-Server', serverType = 'skaffa-city') {
+ * Beheert Pterodactyl game servers via hoofds    async createServer(serverName = 'SkaffaCity-Se    async createServer(serverName = 'SkaffaCity-Server'    async startServer(serverId) {
+        try {
+            if (!serverId) {
+                console.error('[GAMESERVER] ❌ Server ID is required');
+                console.log('Usage: gameserver start <server-id>');
+                return;
+            }
+
+            console.log(`[GAMESERVER] 🚀 Starting game server ${serverId}...`);
+            console.log(`[GAMESERVER] 🔗 Using API: ${this.getPterodactylUrl()}`);
+            
+            const apiKey = this.getEffectiveApiKey('admin');
+            
+            await this.gameServerManager.startServer(serverId, {
+                apiKey: apiKey,
+                apiUrl: this.getPterodactylUrl()
+            });
+            
+            console.log('[GAMESERVER] ✅ Server start command sent successfully!');
+            console.log('[GAMESERVER] ⏳ Server is starting up, use "gameserver status" to check progress');
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to start server:', error.message);
+        }
+    }ffa-city') {
+        try {
+            console.log(`[GAMESERVER] 🔨 Creating new ${serverType} game server: ${serverName}`);
+            console.log('[GAMESERVER] 📡 Using Pterodactyl Panel API...');
+            console.log(`[GAMESERVER] 🔗 API URL: ${this.getPterodactylUrl()}`);
+            
+            const apiKey = this.getEffectiveApiKey('admin');
+            const template = this.getServerTemplate();
+            
+            if (!apiKey) {
+                throw new Error('No admin API key configured');
+            }
+            
+            const serverConfig = {
+                name: serverName,
+                type: serverType,
+                apiKey: apiKey,
+                apiUrl: this.getPterodactylUrl(),
+                template: template
+            };
+            
+            const newServer = await this.gameServerManager.createGameServer(serverConfig);
+            
+            console.log('[GAMESERVER] ✅ Game server created successfully!');
+            console.log('[GAMESERVER] 📋 Server Details:');
+            console.log(`  - Server ID: ${newServer.id}`);
+            console.log(`  - Name: ${newServer.name}`);
+            console.log(`  - Type: ${serverType}`);
+            console.log(`  - Status: ${newServer.status}`);
+            console.log(`  - Memory: ${template?.limits?.memory || 'N/A'}MB`);
+            console.log(`  - Docker: ${template?.docker_image || 'Default'}`);
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to create game server:', error.message);
+            if (error.message.includes('API') || error.message.includes('key')) {
+                console.log('[GAMESERVER] 💡 Check Pterodactyl configuration with "gameserver config"');
+            }
+        }
+    }e = 'skaffa-city') {
         try {
             console.log(`[GAMESERVER] 🔨 Creating new ${serverType} game server: ${serverName}`);
             c    async initialize() {
@@ -180,8 +242,14 @@ class GameServerCommand {
             }
 
             console.log(`[GAMESERVER] 🛑 Stopping game server ${serverId}...`);
+            console.log(`[GAMESERVER] 🔗 Using API: ${this.getPterodactylUrl()}`);
             
-            await this.gameServerManager.stopServer(serverId);
+            const apiKey = this.getEffectiveApiKey('admin');
+            
+            await this.gameServerManager.stopServer(serverId, {
+                apiKey: apiKey,
+                apiUrl: this.getPterodactylUrl()
+            });
             
             console.log('[GAMESERVER] ✅ Server stop command sent successfully!');
             
@@ -345,11 +413,14 @@ class GameServerCommand {
     }
 
     isPterodactylConfigured() {
-        return this.gameserverConfig && 
-               this.gameserverConfig.pterodactyl && 
-               this.gameserverConfig.pterodactyl.enabled &&
-               this.gameserverConfig.pterodactyl.apiUrl &&
-               this.gameserverConfig.pterodactyl.apiKey;
+        if (!this.gameserverConfig || !this.gameserverConfig.pterodactyl) {
+            return false;
+        }
+        
+        const ptero = this.gameserverConfig.pterodactyl;
+        const apiKey = ptero.apiKey || this.gameserverConfig.apiKey;
+        
+        return ptero.enabled && ptero.apiUrl && apiKey;
     }
 
     async showConfig() {
@@ -359,12 +430,19 @@ class GameServerCommand {
         
         if (this.gameserverConfig && this.gameserverConfig.pterodactyl) {
             const ptero = this.gameserverConfig.pterodactyl;
+            const apiKey = ptero.apiKey || this.gameserverConfig.apiKey;
+            const adminKey = ptero.adminApiKey || this.gameserverConfig.adminApiKey;
+            
+            console.log(`║ Status         : ${this.isPterodactylConfigured() ? '✅ Configured' : '❌ Not Ready'}`.padEnd(62) + ' ║');
             console.log(`║ Enabled        : ${ptero.enabled ? '✅ Yes' : '❌ No'}`.padEnd(62) + ' ║');
             console.log(`║ API URL        : ${(ptero.apiUrl || 'Not set').substring(0, 35)}`.padEnd(62) + ' ║');
-            console.log(`║ API Key        : ${ptero.apiKey ? '✅ Configured' : '❌ Not set'}`.padEnd(62) + ' ║');
-            console.log(`║ Server ID      : ${ptero.serverId || 'Not set'}`.padEnd(62) + ' ║');
+            console.log(`║ API Key        : ${apiKey ? '✅ Configured' : '❌ Not set'}`.padEnd(62) + ' ║');
+            console.log(`║ Admin Key      : ${adminKey ? '✅ Configured' : '❌ Not set'}`.padEnd(62) + ' ║');
+            console.log(`║ Client Key     : ${ptero.clientApiKey ? '✅ Configured' : '❌ Not set'}`.padEnd(62) + ' ║');
+            console.log(`║ Server ID      : ${ptero.serverId || 'Auto-detect'}`.padEnd(62) + ' ║');
             console.log(`║ Max Servers    : ${this.gameserverConfig.maxServers || 5}`.padEnd(62) + ' ║');
             console.log(`║ Auto Scale     : ${this.gameserverConfig.autoScale ? '✅ Yes' : '❌ No'}`.padEnd(62) + ' ║');
+            console.log(`║ Docker Image   : ${this.gameserverConfig.serverTemplate?.docker_image?.substring(0, 25) || 'Default'}`.padEnd(62) + ' ║');
         } else {
             console.log('║ ❌ Configuration not found                               ║');
         }
@@ -397,6 +475,32 @@ class GameServerCommand {
         console.log('║ 📡 Managed via Pterodactyl Panel API                    ║');
         console.log('║ ⚙️  Use "gameserver config" to check configuration      ║');
         console.log('╚══════════════════════════════════════════════════════════╝');
+    }
+
+    getEffectiveApiKey(keyType = 'api') {
+        if (!this.gameserverConfig || !this.gameserverConfig.pterodactyl) {
+            return null;
+        }
+        
+        const ptero = this.gameserverConfig.pterodactyl;
+        
+        switch (keyType) {
+            case 'admin':
+                return ptero.adminApiKey || this.gameserverConfig.adminApiKey || ptero.apiKey || this.gameserverConfig.apiKey;
+            case 'client':
+                return ptero.clientApiKey || ptero.apiKey || this.gameserverConfig.apiKey;
+            case 'api':
+            default:
+                return ptero.apiKey || this.gameserverConfig.apiKey;
+        }
+    }
+
+    getPterodactylUrl() {
+        return this.gameserverConfig?.pterodactyl?.apiUrl;
+    }
+
+    getServerTemplate() {
+        return this.gameserverConfig?.serverTemplate;
     }
 }
 
