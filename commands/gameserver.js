@@ -1,644 +1,283 @@
 /**
- * SkaffaCity UDP Game Server Instance
- * Real-time multiplayer game server voor een specifieke server instantie
+ * Game Server Management Command
+ * Beheert Pterodactyl game servers via hoofdserver command interface
  */
 
-const dgram = require('dgram');
-const { EventEmitter } = require('events');
-const axios = require('axios');
+const GameServerManager = require('../managers/GameServerManager');
 
-class SkaffaCityGameServer extends EventEmitter {
-    constructor(config = {}) {
-        super();
-        
-        this.config = {
-            serverId: process.env.GAME_SERVER_ID || 'gameserver-' + Date.now(),
-            port: parseInt(process.env.GAME_SERVER_PORT) || 7001,
-            masterServerUrl: process.env.MASTER_SERVER_URL || 'http://localhost:8000',
-            maxPlayers: parseInt(process.env.MAX_PLAYERS) || 50,
-            tickRate: parseInt(process.env.TICK_RATE) || 20, // 20 Hz
-            worldSize: { x: 2000, y: 2000, z: 2000 },
-            ...config
-        };
-
-        // Server state
-        this.players = new Map(); // playerId -> playerData
-        this.gameObjects = new Map(); // objectId -> gameObjectData
-        this.isRunning = false;
-        this.tickCount = 0;
-        this.lastTick = Date.now();
-        
-        // Network
-        this.socket = null;
-        this.clients = new Map(); // address:port -> clientInfo
-        
-        // Performance tracking
-        this.stats = {
-            packetsReceived: 0,
-            packetsSent: 0,
-            playersConnected: 0,
-            uptime: Date.now()
-        };
-
-        console.log(`[GameServer-${this.config.serverId}] Geïnitialiseerd op poort ${this.config.port}`);
+class GameServerCommand {
+    constructor() {
+        this.description = 'Manage Pterodactyl game servers for SkaffaCity';
+        this.usage = 'gameserver <create|start|stop|restart|delete|list|status|info>';
+        this.gameServerManager = new GameServerManager();
     }
 
-    /**
-     * Start de UDP game server
-     */
-    async start() {
-        try {
-            this.socket = dgram.createSocket('udp4');
-            
-            // Setup event listeners
-            this.setupSocketListeners();
-            
-            // Bind socket
-            await new Promise((resolve, reject) => {
-                this.socket.bind(this.config.port, (error) => {
-                    if (error) reject(error);
-                    else resolve();
-                });
-            });
-
-            // Register met master server
-            await this.registerWithMasterServer();
-            
-            // Start game loop
-            this.startGameLoop();
-            
-            this.isRunning = true;
-            console.log(`[GameServer-${this.config.serverId}] ✅ Server gestart op poort ${this.config.port}`);
-            
-        } catch (error) {
-            console.error(`[GameServer-${this.config.serverId}] ❌ Fout bij starten:`, error.message);
-            throw error;
-        }
-    }
-
-    /**
-     * Setup UDP socket event listeners
-     */
-    setupSocketListeners() {
-        this.socket.on('message', (message, remoteInfo) => {
-            this.handleIncomingPacket(message, remoteInfo);
-        });
-
-        this.socket.on('error', (error) => {
-            console.error(`[GameServer-${this.config.serverId}] Socket error:`, error.message);
-        });
-
-        this.socket.on('close', () => {
-            console.log(`[GameServer-${this.config.serverId}] Socket gesloten`);
-            this.isRunning = false;
-        });
-    }
-
-    /**
-     * Handle inkomende UDP packets
-     */
-    handleIncomingPacket(buffer, remoteInfo) {
-        try {
-            this.stats.packetsReceived++;
-            
-            const clientKey = `${remoteInfo.address}:${remoteInfo.port}`;
-            
-            // Parse packet
-            const packet = this.parsePacket(buffer);
-            if (!packet) return;
-
-            // Update client info
-            this.clients.set(clientKey, {
-                address: remoteInfo.address,
-                port: remoteInfo.port,
-                lastSeen: Date.now(),
-                playerId: packet.playerId
-            });
-
-            // Process packet gebaseerd op type
-            this.processPacket(packet, clientKey);
-            
-        } catch (error) {
-            console.error(`[GameServer-${this.config.serverId}] Packet processing error:`, error.message);
-        }
-    }
-
-    /**
-     * Parse binary UDP packet
-     */
-    parsePacket(buffer) {
-        try {
-            // Eenvoudig JSON protocol voor nu (in productie zou je binary gebruiken)
-            const packetData = JSON.parse(buffer.toString());
-            return packetData;
-        } catch (error) {
-            console.error('Packet parse error:', error.message);
-            return null;
-        }
-    }
-
-    /**
-     * Process parsed packet
-     */
-    processPacket(packet, clientKey) {
-        const { type, playerId, data } = packet;
-
-        switch (type) {
-            case 'PLAYER_JOIN':
-                this.handlePlayerJoin(playerId, data, clientKey);
-                break;
-                
-            case 'PLAYER_MOVE':
-                this.handlePlayerMove(playerId, data);
-                break;
-                
-            case 'PLAYER_ACTION':
-                this.handlePlayerAction(playerId, data);
-                break;
-                
-            case 'CHAT_MESSAGE':
-                this.handleChatMessage(playerId, data);
-                break;
-                
-            case 'PING':
-                this.handlePing(playerId, clientKey);
-                break;
-                
-            default:
-                console.warn(`[GameServer-${this.config.serverId}] Unknown packet type: ${type}`);
-        }
-    }
-
-    /**
-     * Handle speler join
-     */
-    handlePlayerJoin(playerId, data, clientKey) {
-        if (this.players.has(playerId)) {
-            console.log(`[GameServer-${this.config.serverId}] Speler ${playerId} opnieuw verbonden`);
-        } else {
-            console.log(`[GameServer-${this.config.serverId}] Nieuwe speler: ${playerId}`);
-            
-            // Spawn positie bepalen
-            const spawnPosition = this.getSpawnPosition();
-            
-            const playerData = {
-                id: playerId,
-                username: data.username || `Player${playerId}`,
-                position: spawnPosition,
-                rotation: { x: 0, y: 0, z: 0 },
-                health: 100,
-                maxHealth: 100,
-                isAlive: true,
-                lastUpdate: Date.now(),
-                clientKey: clientKey
-            };
-
-            this.players.set(playerId, playerData);
-            this.stats.playersConnected = this.players.size;
-
-            // Stuur welkom bericht
-            this.sendToPlayer(playerId, {
-                type: 'WELCOME',
-                data: {
-                    serverId: this.config.serverId,
-                    spawnPosition: spawnPosition,
-                    worldSize: this.config.worldSize
-                }
-            });
-
-            // Notify andere spelers
-            this.broadcastToOthers(playerId, {
-                type: 'PLAYER_JOINED',
-                data: playerData
-            });
-        }
-    }
-
-    /**
-     * Handle speler movement
-     */
-    handlePlayerMove(playerId, data) {
-        const player = this.players.get(playerId);
-        if (!player) return;
-
-        // Validate movement (basic anti-cheat)
-        if (this.validateMovement(player.position, data.position)) {
-            player.position = data.position;
-            player.rotation = data.rotation;
-            player.lastUpdate = Date.now();
-
-            // Broadcast movement naar andere spelers
-            this.broadcastToOthers(playerId, {
-                type: 'PLAYER_MOVED',
-                data: {
-                    playerId: playerId,
-                    position: data.position,
-                    rotation: data.rotation
-                }
-            });
-        }
-    }
-
-    /**
-     * Handle speler actions (combat, interactions, etc.)
-     */
-    handlePlayerAction(playerId, data) {
-        const player = this.players.get(playerId);
-        if (!player) return;
-
-        const { action, target, parameters } = data;
+    async execute(args) {
+        const action = args[0];
 
         switch (action) {
-            case 'ATTACK':
-                this.handleAttack(playerId, target, parameters);
+            case 'create':
+                await this.createServer();
                 break;
-                
-            case 'INTERACT':
-                this.handleInteraction(playerId, target, parameters);
+            case 'start':
+                await this.startServer(args[1]);
                 break;
-                
-            case 'USE_ITEM':
-                this.handleItemUse(playerId, parameters);
+            case 'stop':
+                await this.stopServer(args[1]);
+                break;
+            case 'restart':
+                await this.restartServer(args[1]);
+                break;
+            case 'delete':
+                await this.deleteServer(args[1]);
+                break;
+            case 'list':
+                await this.listServers();
+                break;
+            case 'status':
+                await this.showStatus(args[1]);
+                break;
+            case 'info':
+                await this.showServerInfo(args[1]);
+                break;
+            case 'init':
+                await this.initialize();
+                break;
+            default:
+                this.showHelp();
                 break;
         }
     }
 
-    /**
-     * Handle chat berichten
-     */
-    handleChatMessage(playerId, data) {
-        const player = this.players.get(playerId);
-        if (!player) return;
-
-        const chatMessage = {
-            type: 'CHAT_MESSAGE',
-            data: {
-                playerId: playerId,
-                username: player.username,
-                message: data.message,
-                timestamp: Date.now()
-            }
-        };
-
-        // Broadcast naar alle spelers
-        this.broadcastToAll(chatMessage);
-    }
-
-    /**
-     * Handle ping requests
-     */
-    handlePing(playerId, clientKey) {
-        this.sendToClient(clientKey, {
-            type: 'PONG',
-            timestamp: Date.now()
-        });
-    }
-
-    /**
-     * Stuur packet naar specifieke speler
-     */
-    sendToPlayer(playerId, packet) {
-        const player = this.players.get(playerId);
-        if (player && player.clientKey) {
-            this.sendToClient(player.clientKey, packet);
-        }
-    }
-
-    /**
-     * Stuur packet naar specifieke client
-     */
-    sendToClient(clientKey, packet) {
-        const client = this.clients.get(clientKey);
-        if (!client) return;
-
+    async createServer() {
         try {
-            const buffer = Buffer.from(JSON.stringify(packet));
-            this.socket.send(buffer, client.port, client.address);
-            this.stats.packetsSent++;
-        } catch (error) {
-            console.error(`[GameServer-${this.config.serverId}] Send error:`, error.message);
-        }
-    }
-
-    /**
-     * Broadcast naar alle spelers behalve één
-     */
-    broadcastToOthers(excludePlayerId, packet) {
-        for (const [playerId, player] of this.players) {
-            if (playerId !== excludePlayerId) {
-                this.sendToPlayer(playerId, packet);
-            }
-        }
-    }
-
-    /**
-     * Broadcast naar alle spelers
-     */
-    broadcastToAll(packet) {
-        for (const [playerId] of this.players) {
-            this.sendToPlayer(playerId, packet);
-        }
-    }
-
-    /**
-     * Valideer speler movement (anti-cheat)
-     */
-    validateMovement(oldPos, newPos) {
-        const maxSpeed = 10; // meters per seconde
-        const deltaTime = 1 / this.config.tickRate;
-        const maxDistance = maxSpeed * deltaTime;
-
-        const distance = Math.sqrt(
-            Math.pow(newPos.x - oldPos.x, 2) +
-            Math.pow(newPos.y - oldPos.y, 2) +
-            Math.pow(newPos.z - oldPos.z, 2)
-        );
-
-        return distance <= maxDistance;
-    }
-
-    /**
-     * Krijg spawn positie voor nieuwe speler
-     */
-    getSpawnPosition() {
-        // Eenvoudige spawn logic - random positie binnen spawn area
-        return {
-            x: Math.random() * 100 - 50, // -50 tot 50
-            y: 0,
-            z: Math.random() * 100 - 50
-        };
-    }
-
-    /**
-     * Start main game loop
-     */
-    startGameLoop() {
-        const tickInterval = 1000 / this.config.tickRate; // ms per tick
-
-        this.gameLoopInterval = setInterval(() => {
-            this.gameTick();
-        }, tickInterval);
-
-        console.log(`[GameServer-${this.config.serverId}] Game loop gestart (${this.config.tickRate} Hz)`);
-    }
-
-    /**
-     * Main game tick
-     */
-    gameTick() {
-        const now = Date.now();
-        const deltaTime = (now - this.lastTick) / 1000;
-        
-        this.tickCount++;
-        this.lastTick = now;
-
-        // Update game state
-        this.updatePlayers(deltaTime);
-        this.updateGameObjects(deltaTime);
-        
-        // Cleanup disconnected clients
-        this.cleanupDisconnectedClients();
-        
-        // Stuur server status naar master server (elke 10 seconden)
-        if (this.tickCount % (this.config.tickRate * 10) === 0) {
-            this.reportToMasterServer();
-        }
-    }
-
-    /**
-     * Update alle spelers
-     */
-    updatePlayers(deltaTime) {
-        const now = Date.now();
-        const disconnectTimeout = 30000; // 30 seconden
-
-        for (const [playerId, player] of this.players) {
-            // Check voor disconnected spelers
-            if (now - player.lastUpdate > disconnectTimeout) {
-                console.log(`[GameServer-${this.config.serverId}] Speler ${playerId} disconnected (timeout)`);
-                this.removePlayer(playerId);
-                continue;
-            }
-
-            // Update speler logica hier
-            // Bijv. health regeneration, buffs/debuffs, etc.
-        }
-    }
-
-    /**
-     * Update game objects
-     */
-    updateGameObjects(deltaTime) {
-        for (const [objectId, gameObject] of this.gameObjects) {
-            // Update game object logica
-            // Bijv. moving platforms, spawners, etc.
-        }
-    }
-
-    /**
-     * Cleanup disconnected clients
-     */
-    cleanupDisconnectedClients() {
-        const now = Date.now();
-        const timeout = 60000; // 60 seconden
-
-        for (const [clientKey, client] of this.clients) {
-            if (now - client.lastSeen > timeout) {
-                this.clients.delete(clientKey);
-            }
-        }
-    }
-
-    /**
-     * Verwijder speler van server
-     */
-    removePlayer(playerId) {
-        const player = this.players.get(playerId);
-        if (player) {
-            this.players.delete(playerId);
-            this.stats.playersConnected = this.players.size;
-
-            // Notify andere spelers
-            this.broadcastToAll({
-                type: 'PLAYER_LEFT',
-                data: { playerId: playerId }
-            });
-
-            console.log(`[GameServer-${this.config.serverId}] Speler ${playerId} verwijderd`);
-        }
-    }
-
-    /**
-     * Registreer met master server (Minecraft-style registration)
-     */
-    async registerWithMasterServer() {
-        try {
-            console.log(`[GameServer-${this.config.serverId}] Registratie met master server (Minecraft-style)...`);
+            console.log('[GAMESERVER] � Creating new SkaffaCity game server via Pterodactyl...');
             
-            const registrationData = {
-                serverId: this.config.serverId,
-                name: `SkaffaCity Game Server ${this.config.serverId}`,
-                serverType: 'gameserver',
-                ip: process.env.GAME_SERVER_IP || 'localhost',
-                port: this.config.port,
-                maxPlayers: this.config.maxPlayers,
-                currentPlayers: this.players.size,
-                gameMode: 'multiplayer',
-                region: process.env.GAME_SERVER_REGION || 'EU-West',
-                version: '1.0.0',
-                status: 'online',
-                capabilities: ['UDP', 'realtime', 'multiplayer'],
-                worldSize: this.config.worldSize
-            };
+            const newServer = await this.gameServerManager.createGameServer();
             
-            const response = await axios.post(`${this.config.masterServerUrl}/api/v1/servers/register`, registrationData, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': `SkaffaCityGameServer/${registrationData.version}`
-                },
-                timeout: 10000
-            });
-            
-            if (response.data && response.data.success) {
-                console.log(`[GameServer-${this.config.serverId}] ✅ Succesvol geregistreerd bij master server`);
-                console.log(`[GameServer-${this.config.serverId}] Server ID: ${response.data.serverId || this.config.serverId}`);
-                
-                // Start heartbeat naar master server
-                this.startHeartbeat();
-            } else {
-                throw new Error('Registration response invalid');
-            }
+            console.log('[GAMESERVER] ✅ Game server created successfully!');
+            console.log('[GAMESERVER] 📋 Server Details:');
+            console.log(`  - Server ID: ${newServer.id}`);
+            console.log(`  - Name: ${newServer.name}`);
+            console.log(`  - Status: ${newServer.status}`);
             
         } catch (error) {
-            console.error(`[GameServer-${this.config.serverId}] ❌ Master server registratie mislukt:`, error.message);
-            console.log(`[GameServer-${this.config.serverId}] Retrying in 30 seconds...`);
-            
-            // Retry after 30 seconds
-            setTimeout(() => {
-                this.registerWithMasterServer();
-            }, 30000);
+            console.error('[GAMESERVER] ❌ Failed to create game server:', error.message);
         }
     }
 
-    /**
-     * Start heartbeat naar master server (Minecraft-style keep-alive)
-     */
-    startHeartbeat() {
-        if (this.heartbeatInterval) {
-            clearInterval(this.heartbeatInterval);
-        }
-        
-        this.heartbeatInterval = setInterval(() => {
-            this.reportToMasterServer();
-        }, 30000); // Elke 30 seconden
-        
-        console.log(`[GameServer-${this.config.serverId}] Heartbeat started (30s interval)`);
-    }
-
-    /**
-     * Rapporteer status naar master server (Minecraft-style heartbeat)
-     */
-    async reportToMasterServer() {
+    async startServer(serverId) {
         try {
-            const status = {
-                serverId: this.config.serverId,
-                currentPlayers: this.players.size,
-                maxPlayers: this.config.maxPlayers,
-                status: this.isRunning ? 'online' : 'offline',
-                performance: {
-                    uptime: Date.now() - this.stats.uptime,
-                    packetsReceived: this.stats.packetsReceived,
-                    packetsSent: this.stats.packetsSent,
-                    tickRate: this.config.tickRate,
-                    currentTick: this.tickCount,
-                    memoryUsage: process.memoryUsage()
+            if (!serverId) {
+                console.error('[GAMESERVER] ❌ Server ID is required');
+                console.log('Usage: gameserver start <server-id>');
+                return;
+            }
+
+            console.log(`[GAMESERVER] � Starting game server ${serverId}...`);
+            
+            await this.gameServerManager.startServer(serverId);
+            
+            console.log('[GAMESERVER] ✅ Server start command sent successfully!');
+            console.log('[GAMESERVER] ⏳ Server is starting up, use "gameserver status" to check progress');
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to start server:', error.message);
+        }
+    }
+
+    async stopServer(serverId) {
+        try {
+            if (!serverId) {
+                console.error('[GAMESERVER] ❌ Server ID is required');
+                console.log('Usage: gameserver stop <server-id>');
+                return;
+            }
+
+            console.log(`[GAMESERVER] 🛑 Stopping game server ${serverId}...`);
+            
+            await this.gameServerManager.stopServer(serverId);
+            
+            console.log('[GAMESERVER] ✅ Server stop command sent successfully!');
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to stop server:', error.message);
+        }
+    }
+
+    async restartServer(serverId) {
+        try {
+            if (!serverId) {
+                console.error('[GAMESERVER] ❌ Server ID is required');
+                console.log('Usage: gameserver restart <server-id>');
+                return;
+            }
+
+            console.log(`[GAMESERVER] 🔄 Restarting game server ${serverId}...`);
+            
+            await this.gameServerManager.restartServer(serverId);
+            
+            console.log('[GAMESERVER] ✅ Server restart command sent successfully!');
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to restart server:', error.message);
+        }
+    }
+
+    async deleteServer(serverId) {
+        try {
+            if (!serverId) {
+                console.error('[GAMESERVER] ❌ Server ID is required');
+                console.log('Usage: gameserver delete <server-id>');
+                return;
+            }
+
+            console.log(`[GAMESERVER] 🗑️ Deleting game server ${serverId}...`);
+            console.log('[GAMESERVER] ⚠️ This action cannot be undone!');
+            
+            await this.gameServerManager.deleteServer(serverId);
+            
+            console.log('[GAMESERVER] ✅ Server deleted successfully!');
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to delete server:', error.message);
+        }
+    }
+
+    async showStatus(serverId) {
+        try {
+            if (serverId) {
+                // Show specific server status
+                console.log(`[GAMESERVER] 📊 Checking status for server ${serverId}...`);
+                const servers = this.gameServerManager.getAllServers();
+                const server = servers.find(s => s.id === serverId || s.name.includes(serverId));
+                
+                if (server) {
+                    console.log('╔══════════════════════════════════════════════════════════╗');
+                    console.log('║                  🎮 SERVER STATUS                       ║');
+                    console.log('╠══════════════════════════════════════════════════════════╣');
+                    console.log(`║ Server ID      : ${server.id.padEnd(35)} ║`);
+                    console.log(`║ Name           : ${server.name.padEnd(35)} ║`);
+                    console.log(`║ Status         : ${server.status.padEnd(35)} ║`);
+                    console.log(`║ Players        : ${server.playerCount.toString().padEnd(35)} ║`);
+                    console.log(`║ Max Players    : ${server.maxPlayers.toString().padEnd(35)} ║`);
+                    console.log('╚══════════════════════════════════════════════════════════╝');
+                } else {
+                    console.log(`[GAMESERVER] ❌ Server ${serverId} not found`);
                 }
-            };
-
-            const response = await axios.post(`${this.config.masterServerUrl}/api/v1/servers/heartbeat`, status, {
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                timeout: 5000
-            });
-
-            if (response.data && response.data.success) {
-                console.log(`[GameServer-${this.config.serverId}] Heartbeat sent: ${status.currentPlayers}/${status.maxPlayers} spelers`);
+            } else {
+                // Show all servers status
+                await this.listServers();
             }
         } catch (error) {
-            console.error(`[GameServer-${this.config.serverId}] Heartbeat failed:`, error.message);
+            console.error('[GAMESERVER] ❌ Failed to get server status:', error.message);
         }
     }
 
-    /**
-     * Unregister van master server (cleanup bij shutdown)
-     */
-    async unregisterFromMasterServer() {
+
+
+    async listServers() {
         try {
-            console.log(`[GameServer-${this.config.serverId}] Unregistering from master server...`);
+            console.log('[GAMESERVER] 📋 Fetching servers from Pterodactyl...');
             
-            await axios.delete(`${this.config.masterServerUrl}/api/v1/servers/unregister/${this.config.serverId}`, {
-                timeout: 5000
-            });
+            const servers = this.gameServerManager.getAllServers();
             
-            console.log(`[GameServer-${this.config.serverId}] ✅ Successfully unregistered from master server`);
+            console.log('╔══════════════════════════════════════════════════════════╗');
+            console.log('║                � PTERODACTYL GAME SERVERS               ║');
+            console.log('╠══════════════════════════════════════════════════════════╣');
+            
+            if (servers.length === 0) {
+                console.log('║ No servers found                                         ║');
+            } else {
+                console.log('║ ID                   Name                      Status    ║');
+                console.log('╠══════════════════════════════════════════════════════════╣');
+                servers.forEach((server) => {
+                    const id = server.id.toString().padEnd(18);
+                    const name = (server.name || 'Unknown').padEnd(25);
+                    const status = (server.status || 'unknown').padEnd(8);
+                    console.log(`║ ${id} ${name} ${status} ║`);
+                });
+            }
+            
+            console.log(`║ Total Servers  : ${servers.length.toString().padEnd(35)} ║`);
+            console.log(`║ Timestamp      : ${new Date().toISOString().padEnd(35)} ║`);
+            console.log('╚══════════════════════════════════════════════════════════╝');
+            
         } catch (error) {
-            console.error(`[GameServer-${this.config.serverId}] Unregister failed:`, error.message);
+            console.error('[GAMESERVER] ❌ Failed to fetch server list:', error.message);
         }
     }
 
-    /**
-     * Stop de game server
-     */
-    async stop() {
-        console.log(`[GameServer-${this.config.serverId}] Server stoppen...`);
-        
-        this.isRunning = false;
-        
-        // Stop alle intervals
-        if (this.gameLoopInterval) {
-            clearInterval(this.gameLoopInterval);
-        }
-        
-        if (this.heartbeatInterval) {
-            clearInterval(this.heartbeatInterval);
-        }
-        
-        // Unregister van master server
+    async showServerInfo(serverId) {
         try {
-            await this.unregisterFromMasterServer();
+            if (!serverId) {
+                console.error('[GAMESERVER] ❌ Server ID is required');
+                console.log('Usage: gameserver info <server-id>');
+                return;
+            }
+
+            console.log(`[GAMESERVER] 📋 Fetching detailed info for server ${serverId}...`);
+            
+            const servers = this.gameServerManager.getAllServers();
+            const server = servers.find(s => s.id === serverId || s.name.includes(serverId));
+            
+            if (server) {
+                console.log('╔══════════════════════════════════════════════════════════╗');
+                console.log('║               🔍 DETAILED SERVER INFO                   ║');
+                console.log('╠══════════════════════════════════════════════════════════╣');
+                console.log(`║ ID             : ${server.id.padEnd(35)} ║`);
+                console.log(`║ Name           : ${server.name.padEnd(35)} ║`);
+                console.log(`║ Status         : ${server.status.padEnd(35)} ║`);
+                console.log(`║ Players        : ${server.playerCount}/${server.maxPlayers}`.padEnd(49) + ' ║');
+                console.log(`║ Map Name       : ${(server.mapName || 'N/A').padEnd(35)} ║`);
+                console.log(`║ Game Mode      : ${(server.gameMode || 'N/A').padEnd(35)} ║`);
+                console.log('╚══════════════════════════════════════════════════════════╝');
+            } else {
+                console.log(`[GAMESERVER] ❌ Server ${serverId} not found`);
+            }
+            
         } catch (error) {
-            console.error(`[GameServer-${this.config.serverId}] Unregister failed:`, error.message);
+            console.error('[GAMESERVER] ❌ Failed to get server info:', error.message);
         }
-        
-        if (this.socket) {
-            this.socket.close();
+    }
+
+    async initialize() {
+        try {
+            console.log('[GAMESERVER] � Initializing GameServerManager...');
+            
+            const success = await this.gameServerManager.initialize();
+            
+            if (success) {
+                console.log('[GAMESERVER] ✅ GameServerManager initialized successfully!');
+                console.log('[GAMESERVER] 🎮 Ready to manage Pterodactyl game servers');
+            } else {
+                console.log('[GAMESERVER] ⚠️ GameServerManager initialization completed with warnings');
+            }
+            
+        } catch (error) {
+            console.error('[GAMESERVER] ❌ Failed to initialize GameServerManager:', error.message);
         }
-        
-        console.log(`[GameServer-${this.config.serverId}] ✅ Server gestopt`);
+    }
+
+    showHelp() {
+        console.log('╔══════════════════════════════════════════════════════════╗');
+        console.log('║            🎮 PTERODACTYL GAMESERVER COMMANDS            ║');
+        console.log('╠══════════════════════════════════════════════════════════╣');
+        console.log('║ create <name> <type>  - Create new Pterodactyl server   ║');
+        console.log('║ start <id/name>       - Start a Pterodactyl server      ║');
+        console.log('║ stop <id/name>        - Stop a Pterodactyl server       ║');
+        console.log('║ restart <id/name>     - Restart a Pterodactyl server    ║');
+        console.log('║ delete <id/name>      - Delete a Pterodactyl server     ║');
+        console.log('║ list                  - List all Pterodactyl servers    ║');
+        console.log('║ status [id/name]      - Show server(s) status           ║');
+        console.log('║ info <id/name>        - Show detailed server info       ║');
+        console.log('║ init                  - Initialize Pterodactyl manager  ║');
+        console.log('║ help                  - Show this help menu             ║');
+        console.log('╠══════════════════════════════════════════════════════════╣');
+        console.log('║ 🔧 Server Types: skaffa-city, survival, creative, arena ║');
+        console.log('║ 📡 Managed via Pterodactyl Panel API                    ║');
+        console.log('╚══════════════════════════════════════════════════════════╝');
     }
 }
 
-// Start server als dit bestand direct wordt uitgevoerd
-if (require.main === module) {
-    const gameServer = new SkaffaCityGameServer();
-    
-    // Graceful shutdown
-    process.on('SIGTERM', async () => {
-        await gameServer.stop();
-        process.exit(0);
-    });
-    
-    process.on('SIGINT', async () => {
-        await gameServer.stop();
-        process.exit(0);
-    });
-    
-    // Start server
-    gameServer.start().catch(error => {
-        console.error('Game server start mislukt:', error.message);
-        process.exit(1);
-    });
-}
-
-module.exports = SkaffaCityGameServer;
+module.exports = GameServerCommand;
