@@ -379,6 +379,18 @@ console.log('[MODULE] Config routes geladen!');
 console.log('[MODULE] Config endpoints registreren op', `${apiPrefix}/config`);
 app.use(`${apiPrefix}/config`, configRoutes);
 
+// Public Server Discovery API routes (voor Unity server discovery)
+console.log('[MODULE] Public server discovery routes laden...');
+let publicServerRoutes;
+try {
+    publicServerRoutes = require('./api/servers.routes');
+    console.log('[MODULE] Public server discovery routes geladen!');
+    console.log('[MODULE] Public server endpoints registreren op', `${apiPrefix}/servers`);
+    app.use(`${apiPrefix}/servers`, publicServerRoutes);
+} catch (error) {
+    console.warn('[MODULE] ⚠️ Public server discovery routes niet beschikbaar:', error.message);
+}
+
 // Internal Server API routes (voor game server communicatie)
 console.log('[MODULE] Internal server routes laden...');
 let internalServerRoutes;
