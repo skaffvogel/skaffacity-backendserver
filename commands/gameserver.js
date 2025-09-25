@@ -71,6 +71,9 @@ class GameServerCommand {
             case 'init':
                 await this.initialize();
                 break;
+            case 'validate':
+                await this.validateConfiguration();
+                break;
             case 'help':
             default:
                 this.showHelp();
@@ -336,7 +339,21 @@ class GameServerCommand {
     async initialize() {
         try {
             console.log('[GAMESERVER] 🔄 Initializing GameServerManager...');
-            console.log('[GAMESERVER] 📋 Checking configuration...');
+            console.log('[GAMESERVER] 📋 Checking gameserver.json configuration...');
+            
+            // First check if gameserver.json exists and has all required values
+            const validationResult = this.validateGameserverConfig();
+            if (!validationResult.isValid) {
+                console.log('[GAMESERVER] ❌ gameserver.json validation failed:');
+                validationResult.errors.forEach(error => {
+                    console.log(`  - ${error}`);
+                });
+                console.log('[GAMESERVER] 💡 Please configure missing values before initializing');
+                await this.showConfig();
+                return;
+            }
+            
+            console.log('[GAMESERVER] ✅ gameserver.json validation passed');
             
             if (!this.isPterodactylConfigured()) {
                 console.log('[GAMESERVER] ⚠️ Pterodactyl is not properly configured');
@@ -346,6 +363,8 @@ class GameServerCommand {
             }
             
             const config = this.getGameserverConfig();
+            console.log('[GAMESERVER] 🔧 Building initialization configuration...');
+            
             const initConfig = {
                 apiKey: this.getEffectiveApiKey('admin'),
                 apiUrl: config.pterodactyl?.apiUrl,
@@ -354,6 +373,22 @@ class GameServerCommand {
                 autoScale: config.autoScale
             };
             
+            // Validate that all init config values are present
+            const missingValues = [];
+            if (!initConfig.apiKey) missingValues.push('Admin API Key');
+            if (!initConfig.apiUrl) missingValues.push('Pterodactyl API URL');
+            if (!initConfig.template) missingValues.push('Server Template');
+            
+            if (missingValues.length > 0) {
+                console.log('[GAMESERVER] ❌ Missing required configuration values:');
+                missingValues.forEach(value => {
+                    console.log(`  - ${value}`);
+                });
+                console.log('[GAMESERVER] 💡 Use "gameserver config" to see current configuration');
+                return;
+            }
+            
+            console.log('[GAMESERVER] 📡 Connecting to Pterodactyl Panel...');
             const success = await this.gameServerManager.initialize(initConfig);
             
             if (success) {
@@ -362,6 +397,8 @@ class GameServerCommand {
                 console.log(`[GAMESERVER] 🔗 Connected to: ${config.pterodactyl?.apiUrl}`);
                 console.log(`[GAMESERVER] 📊 Max servers: ${config.maxServers}`);
                 console.log(`[GAMESERVER] ⚖️ Auto-scale: ${config.autoScale ? 'Enabled' : 'Disabled'}`);
+                console.log(`[GAMESERVER] 🐋 Docker image: ${config.serverTemplate?.docker_image || 'Default'}`);
+                console.log(`[GAMESERVER] 💾 Memory limit: ${config.serverTemplate?.limits?.memory || 'Default'}MB`);
             } else {
                 console.log('[GAMESERVER] ⚠️ GameServerManager initialization completed with warnings');
             }
@@ -370,6 +407,122 @@ class GameServerCommand {
             console.error('[GAMESERVER] ❌ Failed to initialize GameServerManager:', error.message);
             console.log('[GAMESERVER] 💡 Check your Pterodactyl configuration with "gameserver config"');
         }
+    }
+
+    async validateConfiguration() {
+        console.log('[GAMESERVER] 🔍 Validating gameserver.json configuration...');
+        console.log('');
+        
+        const validationResult = this.validateGameserverConfig();
+        
+        if (validationResult.isValid) {
+            console.log('╔══════════════════════════════════════════════════════════╗');
+            console.log('║                ✅ CONFIGURATION VALID                   ║');
+            console.log('╠══════════════════════════════════════════════════════════╣');
+            console.log('║ All required values are present in gameserver.json      ║');
+            console.log('║ Configuration is ready for initialization                ║');
+            console.log('╚══════════════════════════════════════════════════════════╝');
+            console.log('');
+            console.log('[GAMESERVER] 💡 Run "gameserver init" to initialize the manager');
+        } else {
+            console.log('╔══════════════════════════════════════════════════════════╗');
+            console.log('║               ❌ CONFIGURATION INVALID                  ║');
+            console.log('╠══════════════════════════════════════════════════════════╣');
+            console.log('║ Found the following configuration issues:               ║');
+            console.log('╠══════════════════════════════════════════════════════════╣');
+            
+            validationResult.errors.forEach((error, index) => {
+                const errorNum = (index + 1).toString().padStart(2, '0');
+                const errorText = error.substring(0, 50);
+                console.log(`║ ${errorNum}. ${errorText.padEnd(53)} ║`);
+            });
+            
+            console.log('╚══════════════════════════════════════════════════════════╝');
+            console.log('');
+            console.log('[GAMESERVER] 💡 Fix these issues in gameserver.json and try again');
+            console.log('[GAMESERVER] 🔧 Use "config set <key> <value>" to update configuration');
+            console.log('[GAMESERVER] 📋 Example: config set gameserver.pterodactyl.apiUrl "https://panel.example.com"');
+        }
+    }
+
+    validateGameserverConfig() {
+        const config = this.getGameserverConfig();
+        const errors = [];
+        
+        if (!config) {
+            errors.push('gameserver.json file not found or not loaded');
+            return { isValid: false, errors };
+        }
+        
+        // Check Pterodactyl configuration
+        if (!config.pterodactyl) {
+            errors.push('pterodactyl section missing in gameserver.json');
+        } else {
+            const ptero = config.pterodactyl;
+            
+            if (typeof ptero.enabled !== 'boolean') {
+                errors.push('pterodactyl.enabled must be true or false');
+            }
+            
+            if (!ptero.apiUrl || typeof ptero.apiUrl !== 'string') {
+                errors.push('pterodactyl.apiUrl is missing or invalid');
+            }
+            
+            // Check if at least one API key is configured
+            const hasApiKey = ptero.apiKey || ptero.adminApiKey || ptero.clientApiKey || config.apiKey || config.adminApiKey;
+            if (!hasApiKey) {
+                errors.push('At least one API key must be configured (apiKey, adminApiKey, or clientApiKey)');
+            }
+            
+            if (ptero.serverId && typeof ptero.serverId !== 'string') {
+                errors.push('pterodactyl.serverId must be a string');
+            }
+        }
+        
+        // Check server template configuration
+        if (!config.serverTemplate) {
+            errors.push('serverTemplate section missing in gameserver.json');
+        } else {
+            const template = config.serverTemplate;
+            
+            if (!template.docker_image || typeof template.docker_image !== 'string') {
+                errors.push('serverTemplate.docker_image is missing or invalid');
+            }
+            
+            if (!template.limits) {
+                errors.push('serverTemplate.limits section missing');
+            } else {
+                if (typeof template.limits.memory !== 'number' || template.limits.memory <= 0) {
+                    errors.push('serverTemplate.limits.memory must be a positive number');
+                }
+                
+                if (typeof template.limits.cpu !== 'number' || template.limits.cpu <= 0) {
+                    errors.push('serverTemplate.limits.cpu must be a positive number');
+                }
+                
+                if (typeof template.limits.disk !== 'number' || template.limits.disk <= 0) {
+                    errors.push('serverTemplate.limits.disk must be a positive number');
+                }
+            }
+            
+            if (!template.environment || typeof template.environment !== 'object') {
+                errors.push('serverTemplate.environment section missing or invalid');
+            }
+        }
+        
+        // Check other required fields
+        if (typeof config.maxServers !== 'number' || config.maxServers <= 0) {
+            errors.push('maxServers must be a positive number');
+        }
+        
+        if (typeof config.autoScale !== 'boolean') {
+            errors.push('autoScale must be true or false');
+        }
+        
+        return {
+            isValid: errors.length === 0,
+            errors: errors
+        };
     }
 
     isPterodactylConfigured() {
@@ -430,12 +583,14 @@ class GameServerCommand {
         console.log('║ status [id/name]      - Show server(s) status           ║');
         console.log('║ info <id/name>        - Show detailed server info       ║');
         console.log('║ config                - Show Pterodactyl configuration  ║');
+        console.log('║ validate              - Validate gameserver.json config ║');
         console.log('║ init                  - Initialize Pterodactyl manager  ║');
         console.log('║ help                  - Show this help menu             ║');
         console.log('╠══════════════════════════════════════════════════════════╣');
         console.log('║ 🔧 Server Types: skaffa-city, survival, creative, arena ║');
         console.log('║ 📡 Managed via Pterodactyl Panel API                    ║');
         console.log('║ ⚙️  Use "gameserver config" to check configuration      ║');
+        console.log('║ 🔍 Use "gameserver validate" to check config validity   ║');
         console.log('╚══════════════════════════════════════════════════════════╝');
     }
 
