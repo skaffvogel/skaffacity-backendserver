@@ -167,53 +167,6 @@ router.post('/heartbeat', (req, res) => {
 });
 
 /**
- * Server Unregister Endpoint
- * Unity servers kunnen zichzelf unregisteren (bij shutdown)
- * @route   DELETE /api/v1/servers/unregister/:serverId
- * @access  Public
- */
-router.delete('/unregister/:serverId', (req, res) => {
-    try {
-        const { serverId } = req.params;
-
-        if (!serverId) {
-            return res.status(400).json({
-                success: false,
-                error: 'Missing serverId'
-            });
-        }
-
-        const server = activeServers.get(serverId);
-        if (!server) {
-            return res.status(404).json({
-                success: false,
-                error: 'Server not found'
-            });
-        }
-
-        // Remove server from registry
-        activeServers.delete(serverId);
-
-        console.log(`[SERVERS] 🗑️ Server unregistered: ${serverId} (${server.ip}:${server.port})`);
-
-        res.json({
-            success: true,
-            message: 'Server unregistered successfully',
-            serverId: serverId,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error) {
-        console.error('[SERVERS] Unregister error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Server unregistration failed',
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-/**
  * Server Configuration Endpoint
  * Unity servers can get their configuration dynamically
  * @route   GET /api/v1/servers/config/:serverId
@@ -327,6 +280,4 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000);
 
-// Export router en activeServers voor andere modules
 module.exports = router;
-module.exports.activeServers = activeServers;
