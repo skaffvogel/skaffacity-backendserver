@@ -403,6 +403,18 @@ try {
     console.warn('[MODULE] ⚠️ Internal server routes niet beschikbaar:', error.message);
 }
 
+// Client API routes (voor Unity client communicatie met master server)
+console.log('[MODULE] Client routes laden...');
+let clientRoutes;
+try {
+    clientRoutes = require('./api/client.routes');
+    console.log('[MODULE] Client routes geladen!');
+    console.log('[MODULE] Client endpoints registreren op', `${apiPrefix}/client`);
+    app.use(`${apiPrefix}/client`, clientRoutes);
+} catch (error) {
+    console.warn('[MODULE] ⚠️ Client routes niet beschikbaar:', error.message);
+}
+
 console.log('[MODULE] Alle API routes geregistreerd!');
 
 // Health check endpoint

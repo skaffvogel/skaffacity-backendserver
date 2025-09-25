@@ -32,32 +32,43 @@ router.post('/connectmaster', (req, res) => {
             console.log(`[CLIENT] Warning: Client version ${version} differs from supported ${supportedVersion}`);
         }
         
-        // Return master server info and available game servers
-        const gameServers = global.gameServerManager ? global.gameServerManager.getLocalServers() : [];
+        // Return master server info and available game servers (Minecraft-style)
+        // Import the active servers from the servers routes
+        const serversRoutes = require('./servers.routes');
+        const activeServers = require('./servers.routes').activeServers || new Map();
+        
+        // Convert Map to Array voor client response
+        const availableGameServers = Array.from(activeServers.values()).filter(server => 
+            server.status === 'online'
+        );
         
         res.json({
             success: true,
-            message: 'Successfully connected to master server',
+            message: 'Successfully connected to master server (Minecraft-style)',
             data: {
                 masterServer: {
-                    id: 'master-001',
+                    id: 'skaffacity-master-001',
                     name: 'SkaffaCity Master Server',
                     version: '1.0.0',
                     status: 'online',
+                    type: 'mojang-style-auth',
                     timestamp: new Date().toISOString()
                 },
-                availableServers: gameServers.map(server => ({
-                    id: server.uuid || server.id,
+                availableServers: availableGameServers.map(server => ({
+                    id: server.id,
                     name: server.name,
-                    ip: process.env.GAME_SERVER_HOST || 'panel.lvlagency.nl',
+                    ip: server.ip || process.env.GAME_SERVER_HOST || 'panel.lvlagency.nl',
                     port: server.port,
-                    playerCount: server.playerCount || 0,
+                    currentPlayers: server.currentPlayers || 0,
                     maxPlayers: server.maxPlayers || 50,
                     status: server.status,
-                    gameMode: 'survival',
-                    region: 'EU-West'
+                    gameMode: server.gameMode || 'multiplayer',
+                    region: server.region || 'EU-West',
+                    version: server.version,
+                    lastHeartbeat: server.lastHeartbeat
                 })),
-                clientId: clientId
+                clientId: clientId,
+                sessionToken: `session_${clientId}_${Date.now()}` // Voor toekomstige authenticatie
             },
             timestamp: new Date().toISOString()
         });
@@ -93,49 +104,69 @@ router.post('/joinserver', (req, res) => {
             });
         }
         
-        // Zoek de gevraagde server
-        const gameServers = global.gameServerManager ? global.gameServerManager.getLocalServers() : [];
-        const targetServer = gameServers.find(server => 
-            server.uuid === serverId || server.id === serverId
-        );
+        // Zoek de gevraagde server in de active servers registry (Minecraft-style)
+        const serversRoutes = require('./servers.routes');
+        const activeServers = require('./servers.routes').activeServers || new Map();
+        
+        const targetServer = activeServers.get(serverId);
         
         if (!targetServer) {
             return res.status(404).json({
                 success: false,
                 message: 'Game server not found or not available',
+                requestedServerId: serverId,
+                availableServers: Array.from(activeServers.keys()),
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // Check server status
+        if (targetServer.status !== 'online') {
+            return res.status(503).json({
+                success: false,
+                message: `Game server is ${targetServer.status}`,
                 timestamp: new Date().toISOString()
             });
         }
         
         // Check server capacity
-        if (targetServer.playerCount >= targetServer.maxPlayers) {
+        if (targetServer.currentPlayers >= targetServer.maxPlayers) {
             return res.status(409).json({
                 success: false,
                 message: 'Game server is full',
+                currentPlayers: targetServer.currentPlayers,
+                maxPlayers: targetServer.maxPlayers,
                 timestamp: new Date().toISOString()
             });
         }
         
-        // Return connection details
+        // Return connection details (Minecraft-style)
+        const connectionToken = `session_${clientId}_${serverId}_${Date.now()}`;
+        
         res.json({
             success: true,
-            message: 'Server join approved',
+            message: 'Game server join approved (Minecraft-style)',
             data: {
                 server: {
-                    id: targetServer.uuid || targetServer.id,
+                    id: targetServer.id,
                     name: targetServer.name,
-                    ip: process.env.GAME_SERVER_HOST || 'panel.lvlagency.nl',
+                    ip: targetServer.ip || process.env.GAME_SERVER_HOST || 'panel.lvlagency.nl',
                     port: targetServer.port,
-                    currentPlayers: targetServer.playerCount || 0,
-                    maxPlayers: targetServer.maxPlayers || 50,
-                    status: targetServer.status
+                    currentPlayers: targetServer.currentPlayers,
+                    maxPlayers: targetServer.maxPlayers,
+                    status: targetServer.status,
+                    gameMode: targetServer.gameMode,
+                    region: targetServer.region
                 },
-                connectionToken: `token_${clientId}_${Date.now()}`, // Simple token generation
+                connectionToken: connectionToken,
                 joinInstructions: {
                     protocol: 'UDP',
-                    timeout: 30,
-                    retries: 3
-                }
+                    connectTimeout: 30,
+                    heartbeatInterval: 5,
+                    retries: 3,
+                    authMethod: 'session-token'
+                },
+                playerInfo: playerInfo || { name: `Player_${clientId}` }
             },
             timestamp: new Date().toISOString()
         });
