@@ -361,32 +361,42 @@ exports.refreshToken = async (req, res) => {
  */
 exports.getUserProfile = async (req, res) => {
     try {
-        const userId = req.user.userId;
-        
-        const user = await User.findByPk(userId);
-        const player = await Player.findOne({ where: { user_id: userId } });
-        
-        if (!user || !player) {
-            return res.status(404).json({
-                success: false,
-                message: 'Gebruiker niet gevonden'
+        // Memory token path (no Sequelize entities guaranteed)
+        if (req.user && req.user.memory) {
+            return res.status(200).json({
+                success: true,
+                player: {
+                    id: req.user.playerId,
+                    username: req.user.username,
+                    email: null,
+                    level: 1,
+                    xp: 0,
+                    skaff: 1000,
+                    health: 100,
+                    max_health: 100,
+                    faction_id: 0
+                },
+                memory: true
             });
         }
-        
-        res.status(200).json({
-            success: true,
-            player: {
-                id: player.id,
-                username: player.username,
-                email: user.email,
-                level: player.level,
-                xp: player.xp,
-                skaff: player.skaff,
-                health: player.health,
-                max_health: player.max_health,
-                faction_id: player.faction_id
-            }
-        });
+
+        const userId = req.user.userId;
+        const user = await User.findByPk(userId);
+        const player = await Player.findOne({ where: { user_id: userId } });
+        if (!user || !player) {
+            return res.status(404).json({ success:false, message:'Gebruiker niet gevonden' });
+        }
+        res.status(200).json({ success:true, player: {
+            id: player.id,
+            username: player.username,
+            email: user.email,
+            level: player.level,
+            xp: player.xp,
+            skaff: player.skaff,
+            health: player.health,
+            max_health: player.max_health,
+            faction_id: player.faction_id
+        }});
     } catch (error) {
         console.error('[Auth] GetUserProfile error:', error);
         res.status(500).json({

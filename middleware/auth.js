@@ -53,6 +53,16 @@ exports.authenticateToken = async (req, res, next) => {
             }
 
             try {
+                // Memory token ondersteuning zelfs nadat Sequelize geactiveerd is
+                if (decoded.mem) {
+                    req.user = {
+                        userId: decoded.userId,
+                        playerId: decoded.playerId,
+                        username: decoded.username,
+                        memory: true
+                    };
+                    return next();
+                }
                 const user = await UserModel.findByPk(decoded.userId);
                 const player = await PlayerModel.findByPk(decoded.playerId);
                 if (!user || !player) {
