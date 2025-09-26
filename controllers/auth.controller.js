@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { Op } = require('sequelize');
 const { User, Player } = require('../models');
+const { v4: uuidv4 } = require('uuid');
 
 // Fallback memory stores when database/models unavailable (development resilience)
 const useMemoryAuth = (!User || !Player);
@@ -78,26 +79,32 @@ exports.register = async (req, res) => {
         
         // Hash password
         const passwordHash = await bcrypt.hash(password, 10);
-        
-        // Maak nieuwe gebruiker aan
+
+        // Maak nieuwe gebruiker aan (UUID string id)
         const newUser = await User.create({
+            id: uuidv4(),
             username,
             email,
-            password_hash: passwordHash,
+            password: passwordHash,
             created_at: new Date()
         });
-        
-        // Maak geassocieerde speler aan
+
+        // Maak geassocieerde speler aan (UUID)
+        const playerId = uuidv4();
         const newPlayer = await Player.create({
+            id: playerId,
             user_id: newUser.id,
             username,
-            level: 1,
-            xp: 0,
-            skaff: 1000, // Startbedrag voor nieuwe spelers
+            faction_id: 0,
             health: 100,
             max_health: 100,
-            faction_id: 0, // Default faction (Naamloos)
-            last_seen: new Date()
+            position_x: 0,
+            position_y: 0,
+            position_z: 0,
+            rotation_x: 0,
+            rotation_y: 0,
+            rotation_z: 0,
+            created_at: new Date()
         });
         
         // Genereer JWT token
@@ -183,7 +190,7 @@ exports.login = async (req, res) => {
         }
         
         // Controleer wachtwoord
-        const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    const isPasswordValid = await bcrypt.compare(password, user.password || user.password_hash);
         
         if (!isPasswordValid) {
             return res.status(401).json({

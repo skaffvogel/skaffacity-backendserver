@@ -18,40 +18,55 @@ module.exports = (sequelize) => {
     }
     
     const User = sequelize.define('User', {
-    id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
-    },
-    username: {
-        type: DataTypes.STRING(50),
-        allowNull: false,
-        unique: true
-    },
-    email: {
-        type: DataTypes.STRING(100),
-        allowNull: false,
-        unique: true,
-        validate: {
-            isEmail: true
+        id: {
+            type: DataTypes.STRING(36),
+            primaryKey: true
+        },
+        username: {
+            type: DataTypes.STRING(50),
+            allowNull: false,
+            unique: true
+        },
+        password: { // match existing migration column name
+            type: DataTypes.STRING(255),
+            allowNull: false
+        },
+        email: {
+            type: DataTypes.STRING(100),
+            allowNull: true,
+            unique: true
+        },
+        display_name: {
+            type: DataTypes.STRING(100),
+            allowNull: true
+        },
+        skaff: {
+            type: DataTypes.BIGINT,
+            allowNull: false,
+            defaultValue: 0
+        },
+        role: {
+            type: DataTypes.ENUM('player','admin','moderator'),
+            allowNull: false,
+            defaultValue: 'player'
+        },
+        is_active: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: true
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            allowNull: false,
+            defaultValue: DataTypes.NOW
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            allowNull: true
         }
-    },
-    password_hash: {
-        type: DataTypes.STRING(255),
-        allowNull: false
-    },
-    created_at: {
-        type: DataTypes.DATE,
-        allowNull: false,
-        defaultValue: DataTypes.NOW
-    },
-    updated_at: {
-        type: DataTypes.DATE,
-        allowNull: true
-    }
     }, {
         tableName: 'users',
-        timestamps: false // We handle timestamps manually
+        timestamps: false
     });
 
     return User;
