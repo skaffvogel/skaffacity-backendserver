@@ -197,36 +197,8 @@ console.log('[MODULE] Database connectie laden...');
 const db = require('./utils/db');
 console.log('[MODULE] Database connectie geladen!');
 
-console.log('[MODULE] Database models laden...');
-let models;
-try {
-    // Test en laad de nieuwe Sequelize models
-    const { validateModels } = require('./utils/model-validator');
-    
-    // Probeer eerst de nieuwe Sequelize models
-    models = require('./models');
-    console.log('[MODULE] Sequelize models geladen!');
-    
-    // Valideer de models (maar start de server ook als validatie faalt)
-    validateModels().then(isValid => {
-        if (isValid) {
-            console.log('[MODULE] ✅ Model validatie succesvol!');
-        } else {
-            console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server start wel');
-        }
-    }).catch(error => {
-        console.error('[VALIDATOR] ❌ Validation failed:', error.message);
-        if (error.stack) {
-            console.error('[VALIDATOR] Stack:', error.stack);
-        }
-        console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server start wel');
-    });
-    
-} catch (error) {
-    console.warn('[MODULE] Database models fout:', error.message);
-    console.warn('[MODULE] Server start zonder Sequelize models');
-    models = {};
-}
+// Models worden pas geladen NA succesvolle (of poging tot) database init om te voorkomen dat sequelize null is
+let models; // wordt later gevuld in startServer()
 
 // Routes importeren
 console.log('[MODULE] Auth routes laden...');
@@ -463,19 +435,46 @@ const startServer = async () => {
     
     // Database initialiseren (optioneel)
     console.log('[MODULE] Database initialisatie starten...');
+    let dbConnected = false;
     try {
-      const dbConnected = await db.initDatabase();
+      dbConnected = await db.initDatabase();
       if (dbConnected) {
         console.log('[MODULE] ✅ Database initialisatie voltooid!');
         global.databaseAvailable = true;
       } else {
-        console.warn('[MODULE] ⚠️  Database niet beschikbaar, server start zonder database functionaliteit');
+        console.warn('[MODULE] ⚠️  Database niet beschikbaar, server draait in beperkte modus');
         global.databaseAvailable = false;
       }
     } catch (error) {
       console.warn('[MODULE] ⚠️  Database connectie mislukt:', error.message);
-      console.warn('[MODULE] ⚠️  Server start zonder database functionaliteit');
       global.databaseAvailable = false;
+    }
+
+    // Nu pas models laden zodat sequelize (indien beschikbaar) aanwezig is
+    console.log('[MODULE] Models initialiseren (uitgesteld)...');
+    try {
+      const { validateModels } = require('./utils/model-validator');
+      models = require('./models');
+      console.log('[MODULE] Sequelize models geladen (late init)!');
+      // Valideer alleen als sequelize actief is
+      if (models && models.sequelize) {
+        validateModels().then(isValid => {
+          if (isValid) {
+            console.log('[MODULE] ✅ Model validatie succesvol!');
+          } else {
+            console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server draait door');
+          }
+        }).catch(error => {
+          console.error('[VALIDATOR] ❌ Validation failed:', error.message);
+          if (error.stack) console.error('[VALIDATOR] Stack:', error.stack);
+          console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server draait door');
+        });
+      } else {
+        console.warn('[MODULE] ⚠️ Sequelize nog steeds niet beschikbaar na late init (legacy/memory mode)');
+      }
+    } catch (error) {
+      console.warn('[MODULE] ⚠️ Models init fout (late init):', error.message);
+      models = {};
     }
     
     // Server starten
