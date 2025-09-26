@@ -428,60 +428,52 @@ app.use((req, res) => {
 });
 console.log('[MODULE] 404 handler geconfigureerd!');
 
-// Start de server
+// Start de server (BLOCKING INIT - pure Sequelize)
 const startServer = async () => {
   try {
-    console.log('[MODULE] Server startup proces starten...');
-    
-    // Database initialiseren (optioneel)
-    console.log('[MODULE] Database initialisatie starten...');
-    let dbConnected = false;
-    try {
-      dbConnected = await db.initDatabase();
-      if (dbConnected) {
-        console.log('[MODULE] ✅ Database initialisatie voltooid!');
-        global.databaseAvailable = true;
-      } else {
-        console.warn('[MODULE] ⚠️  Database niet beschikbaar, server draait in beperkte modus');
-        global.databaseAvailable = false;
-      }
-    } catch (error) {
-      console.warn('[MODULE] ⚠️  Database connectie mislukt:', error.message);
-      global.databaseAvailable = false;
-    }
+    console.log('[BOOT] Server startup proces (blocking init)');
 
-    // Nu pas models laden zodat sequelize (indien beschikbaar) aanwezig is
-    console.log('[MODULE] Models initialiseren (uitgesteld)...');
+    // 1. Database initialiseren met retries
+    let dbConnected = false;
+    for (let attempt = 1; attempt <= 5 && !dbConnected; attempt++) {
+      console.log(`[BOOT] DB connect poging ${attempt}/5`);
+      try {
+        dbConnected = await db.initDatabase();
+        if (!dbConnected) {
+          console.warn('[BOOT] DB connectie niet gelukt (return false)');
+        }
+      } catch (e) {
+        console.warn('[BOOT] DB fout:', e.message);
+      }
+      if (!dbConnected) await new Promise(r => setTimeout(r, 1500 * attempt));
+    }
+    if (!dbConnected) {
+      console.error('[FATAL] Database niet beschikbaar na retries – afsluiten (Option B vereist DB)');
+      process.exit(1);
+    }
+    console.log('[BOOT] ✅ Database verbonden');
+
+    // 2. Models initialiseren (blocking)
+    models = require('./models');
+    const initOk = await models.ensureInitialized({ retries: 3, backoffMs: 750 });
+    if (!initOk) {
+      console.error('[FATAL] Models konden niet initialiseren:', models.getLastInitError() && models.getLastInitError().message);
+      process.exit(1);
+    }
+    console.log('[BOOT] ✅ Models geïnitialiseerd');
+
+    // 3. Optionele model validatie
     try {
       const { validateModels } = require('./utils/model-validator');
-      models = require('./models');
-      console.log('[MODULE] Sequelize models geladen (late init)!');
-      // Valideer alleen als sequelize actief is
-      if (models && models.sequelize) {
-        validateModels().then(isValid => {
-          if (isValid) {
-            console.log('[MODULE] ✅ Model validatie succesvol!');
-          } else {
-            console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server draait door');
-          }
-        }).catch(error => {
-          console.error('[VALIDATOR] ❌ Validation failed:', error.message);
-          if (error.stack) console.error('[VALIDATOR] Stack:', error.stack);
-          console.warn('[MODULE] ⚠️ Model validatie gefaald, maar server draait door');
-        });
-      } else {
-        console.warn('[MODULE] ⚠️ Sequelize nog steeds niet beschikbaar na late init (legacy/memory mode)');
-      }
-    } catch (error) {
-      console.warn('[MODULE] ⚠️ Models init fout (late init):', error.message);
-      models = {};
+      const valid = await validateModels();
+      if (valid) console.log('[BOOT] ✅ Model validatie OK');
+      else console.warn('[BOOT] ⚠️ Model validatie issues (doorstart)');
+    } catch (e) {
+      console.warn('[BOOT] Validatie exception (doorstart):', e.message);
     }
-    
-    // Server starten
-    
-    // Gebruik altijd de huidige configuratie
+
     const currentServerConfig = getCurrentServerConfig();
-    
+
     if (currentServerConfig.enableHTTPS) {
       console.log('[MODULE] HTTPS server starten...');
       
@@ -562,7 +554,7 @@ const startServer = async () => {
       });
     }
   } catch (error) {
-    console.error(`Server start mislukt: ${error.message}`);
+    console.error(`[FATAL] Server start mislukt: ${error.message}`);
     process.exit(1);
   }
 };
@@ -581,4 +573,22 @@ process.on('SIGINT', async () => {
 });
 
 // Start de server
+// Extra readiness & status endpoints (na definitie van routes, voor start)
+app.get(`${apiPrefix}/ready`, (req, res) => {
+  if (models && models.isInitialized && models.isInitialized()) {
+    return res.status(200).json({ status:'ready' });
+  }
+  return res.status(503).json({ status:'initializing' });
+});
+
+app.get(`${apiPrefix}/status`, (req, res) => {
+  res.json({
+    success:true,
+    dbConnected: !!db.sequelize,
+    modelsInitialized: models && models.isInitialized ? models.isInitialized() : false,
+    modelInitError: models && models.getLastInitError ? (models.getLastInitError() && models.getLastInitError().message) : null,
+    timestamp: new Date().toISOString()
+  });
+});
+
 startServer();

@@ -1,308 +1,101 @@
 /**
- * Auth controller voor authenticatie en gebruikersbeheer
+ * Auth controller (PURE SEQUELIZE MODE - Option B)
+ * Memory fallback verwijderd. Alle paden vereisen succesvolle database initialisatie.
  */
 
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { Op } = require('sequelize');
-const { User, Player } = require('../models');
+const { sequelize, User, Player } = require('../models');
 const { v4: uuidv4 } = require('uuid');
 
-// Fallback memory stores when database/models unavailable (development resilience)
-const useMemoryAuth = (!User || !Player);
-let memoryUserSeq = 1;
-let memoryPlayerSeq = 1;
-const memoryUsers = new Map(); // key: username, value: { id, username, email, password_hash }
-const memoryPlayers = new Map(); // key: playerId, value: { id, user_id, username, level, skaff, health }
-
 // Helper functie voor het genereren van JWT tokens
-const generateToken = (user, player) => {
-    return jwt.sign(
-        { 
-            userId: user.id,
-            playerId: player.id,
-            username: user.username,
-            mem: useMemoryAuth ? true : false
-        },
-        process.env.JWT_SECRET || 'skaffacity_secret_key_2025',
-        { expiresIn: '24h' }
-    );
-};
+const generateToken = (user, player) => jwt.sign({
+  userId: user.id,
+  playerId: player.id,
+  username: user.username
+}, process.env.JWT_SECRET || 'skaffacity_secret_key_2025', { expiresIn: '12h' });
 
 /**
  * Registreer een nieuwe gebruiker
  */
 exports.register = async (req, res) => {
-    try {
-        if (useMemoryAuth) {
-            const { username, email, password } = req.body;
-            if (!username || !email || !password) {
-                return res.status(400).json({ success:false, message:'Gebruikersnaam, e-mail en wachtwoord zijn vereist (memory mode)' });
-            }
-            if (memoryUsers.has(username)) {
-                return res.status(409).json({ success:false, message:'Gebruikersnaam al in gebruik (memory mode)' });
-            }
-            const bcryptHash = await bcrypt.hash(password, 8);
-            const userObj = { id: memoryUserSeq++, username, email, password_hash: bcryptHash };
-            memoryUsers.set(username, userObj);
-            const playerObj = { id: memoryPlayerSeq++, user_id: userObj.id, username, level:1, skaff:1000, health:100 };
-            memoryPlayers.set(playerObj.id, playerObj);
-            const token = generateToken(userObj, playerObj);
-            return res.status(201).json({ success:true, message:'Account (memory) aangemaakt', token, player:{ id: playerObj.id, username, level:1, skaff:1000, health:100, email } });
-        }
-        const { username, email, password, displayName } = req.body;
-        
-        // Valideer input
-        if (!username || !email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Gebruikersnaam, e-mail en wachtwoord zijn vereist'
-            });
-        }
-        
-        // Controleer of gebruikersnaam of email al bestaat
-        const existingUser = await User.findOne({
-            where: {
-                [Op.or]: [
-                    { username },
-                    { email }
-                ]
-            }
-        });
-        
-        if (existingUser) {
-            return res.status(409).json({
-                success: false,
-                message: 'Gebruikersnaam of e-mail is al in gebruik'
-            });
-        }
-        
-        // Hash password
-        const passwordHash = await bcrypt.hash(password, 10);
-
-        // Maak nieuwe gebruiker aan (UUID string id)
-        const newUser = await User.create({
-            id: uuidv4(),
-            username,
-            email,
-            password: passwordHash,
-            created_at: new Date()
-        });
-
-        // Maak geassocieerde speler aan (UUID)
-        const playerId = uuidv4();
-        const newPlayer = await Player.create({
-            id: playerId,
-            user_id: newUser.id,
-            username,
-            faction_id: 0,
-            health: 100,
-            max_health: 100,
-            position_x: 0,
-            position_y: 0,
-            position_z: 0,
-            rotation_x: 0,
-            rotation_y: 0,
-            rotation_z: 0,
-            created_at: new Date()
-        });
-        
-        // Genereer JWT token
-        const token = generateToken(newUser, newPlayer);
-        
-        res.status(201).json({
-            success: true,
-            message: 'Account succesvol aangemaakt',
-            token,
-            player: {
-                id: newPlayer.id,
-                username: newPlayer.username,
-                level: newPlayer.level,
-                skaff: newPlayer.skaff,
-                health: newPlayer.health,
-                email: newUser.email
-            }
-        });
-    } catch (error) {
-        console.error('[Auth] Registration error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Interne serverfout tijdens registratie'
-        });
+  try {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ success:false, message:'Gebruikersnaam, e-mail en wachtwoord zijn vereist' });
     }
+    const existing = await User.findOne({ where:{ [Op.or]: [{ username }, { email }] } });
+    if (existing) return res.status(409).json({ success:false, message:'Gebruikersnaam of e-mail al in gebruik' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const t = await sequelize.transaction();
+    try {
+      const user = await User.create({ id: uuidv4(), username, email, password: passwordHash, created_at: new Date() }, { transaction: t });
+      const player = await Player.create({
+        id: uuidv4(),
+        user_id: user.id,
+        username,
+        faction_id: 0,
+        health: 100,
+        max_health: 100,
+        position_x: 0, position_y: 0, position_z: 0,
+        rotation_x: 0, rotation_y: 0, rotation_z: 0,
+        created_at: new Date()
+      }, { transaction: t });
+      await t.commit();
+      const token = generateToken(user, player);
+      return res.status(201).json({ success:true, message:'Account aangemaakt', token, player:{ id: player.id, username: player.username, health: player.health, max_health: player.max_health, email: user.email } });
+    } catch (e) {
+      await t.rollback();
+      console.error('[Auth][Register] Transactie fout:', e.message);
+      return res.status(500).json({ success:false, message:'Registratie mislukt' });
+    }
+  } catch (error) {
+    console.error('[Auth] Registration error:', error.message);
+    res.status(500).json({ success:false, message:'Interne serverfout tijdens registratie' });
+  }
 };
 
 /**
  * Log in met bestaande gebruiker
  */
 exports.login = async (req, res) => {
-    try {
-        if (useMemoryAuth) {
-            const { username, password } = req.body;
-            if (!username || !password) {
-                return res.status(400).json({ success:false, message:'Gebruikersnaam en wachtwoord vereist (memory)' });
-            }
-            const user = memoryUsers.get(username);
-            if (!user) {
-                return res.status(401).json({ success:false, message:'Ongeldige inloggegevens (memory)' });
-            }
-            const isValid = await bcrypt.compare(password, user.password_hash);
-            if (!isValid) {
-                return res.status(401).json({ success:false, message:'Ongeldige inloggegevens (memory)' });
-            }
-            // Zoek associated memory player (linear scan acceptable small)
-            let player = null;
-            for (const p of memoryPlayers.values()) {
-                if (p.user_id === user.id) { player = p; break; }
-            }
-            if (!player) {
-                player = { id: memoryPlayerSeq++, user_id: user.id, username: user.username, level:1, skaff:1000, health:100 };
-                memoryPlayers.set(player.id, player);
-            }
-            const token = generateToken(user, player);
-            return res.json({ success:true, message:'Succesvol ingelogd (memory)', token, player:{ id: player.id, username: player.username, level: player.level, skaff: player.skaff, health: player.health, email: user.email } });
-        }
-        const { username, password } = req.body;
-        
-        // Valideer input
-        if (!username || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Gebruikersnaam en wachtwoord zijn vereist'
-            });
-        }
-        
-        // Zoek gebruiker op username of email
-        const user = await User.findOne({
-            where: {
-                [Op.or]: [
-                    { username },
-                    { email: username }
-                ]
-            }
-        });
-        
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Ongeldige inloggegevens'
-            });
-        }
-        
-        // Controleer wachtwoord
-    const isPasswordValid = await bcrypt.compare(password, user.password || user.password_hash);
-        
-        if (!isPasswordValid) {
-            return res.status(401).json({
-                success: false,
-                message: 'Ongeldige inloggegevens'
-            });
-        }
-        
-        // Zoek geassocieerde speler
-        const player = await Player.findOne({
-            where: { user_id: user.id }
-        });
-        
-        if (!player) {
-            return res.status(500).json({
-                success: false,
-                message: 'Spelersprofiel niet gevonden'
-            });
-        }
-        
-        // Update laatste bezoek
-        await player.update({
-            last_seen: new Date()
-        });
-        
-        // Genereer JWT token
-        const token = generateToken(user, player);
-        
-        res.json({
-            success: true,
-            message: 'Succesvol ingelogd',
-            token,
-            player: {
-                id: player.id,
-                username: player.username,
-                level: player.level,
-                skaff: player.skaff,
-                health: player.health,
-                email: user.email
-            }
-        });
-    } catch (error) {
-        console.error('[Auth] Login error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Interne serverfout tijdens inloggen'
-        });
-    }
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ success:false, message:'Gebruikersnaam en wachtwoord vereist' });
+    const user = await User.findOne({ where:{ [Op.or]: [{ username }, { email: username }] } });
+    if (!user) return res.status(401).json({ success:false, message:'Ongeldige inloggegevens' });
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ success:false, message:'Ongeldige inloggegevens' });
+    const player = await Player.findOne({ where:{ user_id: user.id } });
+    if (!player) return res.status(500).json({ success:false, message:'Spelersprofiel ontbreekt' });
+    await player.update({ last_seen: new Date() });
+    const token = generateToken(user, player);
+    return res.json({ success:true, message:'Succesvol ingelogd', token, player:{ id: player.id, username: player.username, health: player.health, max_health: player.max_health, email: user.email } });
+  } catch (error) {
+    console.error('[Auth] Login error:', error.message);
+    res.status(500).json({ success:false, message:'Interne serverfout tijdens inloggen' });
+  }
 };
 
 /**
  * Valideer JWT token (voor Unity)
  */
 exports.validateToken = async (req, res) => {
-    try {
-        if (useMemoryAuth) {
-            const token = req.headers.authorization?.split(' ')[1];
-            if (!token) return res.status(401).json({ success:false, message:'Geen token opgegeven' });
-            try {
-                const decoded = jwt.verify(token, process.env.JWT_SECRET || 'skaffacity_secret_key_2025');
-                if (!decoded || !decoded.mem) return res.status(401).json({ success:false, message:'Token ongeldig (memory)' });
-                // reconstruct player
-                let player = null; let user = null;
-                for (const u of memoryUsers.values()) if (u.id === decoded.userId) { user = u; break; }
-                for (const p of memoryPlayers.values()) if (p.id === decoded.playerId) { player = p; break; }
-                if (!user || !player) return res.status(401).json({ success:false, message:'Token entiteiten ontbreken (memory)' });
-                return res.json({ success:true, message:'Token geldig (memory)', player:{ id: player.id, username: player.username, level: player.level, skaff: player.skaff, health: player.health, email: user.email } });
-            } catch(e) {
-                return res.status(401).json({ success:false, message:'Ongeldige of verlopen token (memory)' });
-            }
-        }
-        const token = req.headers.authorization?.split(' ')[1];
-        
-        if (!token) {
-            return res.status(401).json({
-                success: false,
-                message: 'Geen token opgegeven'
-            });
-        }
-        
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'skaffacity_secret_key_2025');
-        
-        const user = await User.findByPk(decoded.userId);
-        const player = await Player.findByPk(decoded.playerId);
-        
-        if (!user || !player) {
-            return res.status(401).json({
-                success: false,
-                message: 'Ongeldige token'
-            });
-        }
-        
-        res.json({
-            success: true,
-            message: 'Token geldig',
-            player: {
-                id: player.id,
-                username: player.username,
-                level: player.level,
-                skaff: player.skaff,
-                health: player.health,
-                email: user.email
-            }
-        });
-        
-    } catch (error) {
-        console.error('[Auth] Token validation error:', error);
-        res.status(401).json({
-            success: false,
-            message: 'Ongeldige of verlopen token'
-        });
-    }
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ success:false, message:'Geen token opgegeven' });
+    let decoded;
+    try { decoded = jwt.verify(token, process.env.JWT_SECRET || 'skaffacity_secret_key_2025'); } catch { return res.status(401).json({ success:false, message:'Ongeldige of verlopen token' }); }
+    const user = await User.findByPk(decoded.userId);
+    const player = await Player.findByPk(decoded.playerId);
+    if (!user || !player) return res.status(401).json({ success:false, message:'Ongeldige token' });
+    return res.json({ success:true, message:'Token geldig', player:{ id: player.id, username: player.username, health: player.health, max_health: player.max_health, email: user.email } });
+  } catch (error) {
+    console.error('[Auth] Token validation error:', error.message);
+    res.status(401).json({ success:false, message:'Ongeldige of verlopen token' });
+  }
 };
 
 /**
@@ -360,50 +153,16 @@ exports.refreshToken = async (req, res) => {
  * Krijg gebruikersprofiel
  */
 exports.getUserProfile = async (req, res) => {
-    try {
-        // Memory token path (no Sequelize entities guaranteed)
-        if (req.user && req.user.memory) {
-            return res.status(200).json({
-                success: true,
-                player: {
-                    id: req.user.playerId,
-                    username: req.user.username,
-                    email: null,
-                    level: 1,
-                    xp: 0,
-                    skaff: 1000,
-                    health: 100,
-                    max_health: 100,
-                    faction_id: 0
-                },
-                memory: true
-            });
-        }
-
-        const userId = req.user.userId;
-        const user = await User.findByPk(userId);
-        const player = await Player.findOne({ where: { user_id: userId } });
-        if (!user || !player) {
-            return res.status(404).json({ success:false, message:'Gebruiker niet gevonden' });
-        }
-        res.status(200).json({ success:true, player: {
-            id: player.id,
-            username: player.username,
-            email: user.email,
-            level: player.level,
-            xp: player.xp,
-            skaff: player.skaff,
-            health: player.health,
-            max_health: player.max_health,
-            faction_id: player.faction_id
-        }});
-    } catch (error) {
-        console.error('[Auth] GetUserProfile error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Interne serverfout'
-        });
-    }
+  try {
+    const userId = req.user.userId;
+    const user = await User.findByPk(userId);
+    const player = await Player.findOne({ where:{ user_id: userId } });
+    if (!user || !player) return res.status(404).json({ success:false, message:'Gebruiker niet gevonden' });
+    return res.status(200).json({ success:true, player:{ id: player.id, username: player.username, email: user.email, health: player.health, max_health: player.max_health, faction_id: player.faction_id } });
+  } catch (error) {
+    console.error('[Auth] GetUserProfile error:', error.message);
+    res.status(500).json({ success:false, message:'Interne serverfout' });
+  }
 };
 
 /**
@@ -433,7 +192,7 @@ exports.updateUserProfile = async (req, res) => {
                 });
             }
             
-            const isPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
             
             if (!isPasswordValid) {
                 return res.status(401).json({
@@ -446,9 +205,7 @@ exports.updateUserProfile = async (req, res) => {
             const newPasswordHash = await bcrypt.hash(newPassword, 10);
             
             // Update wachtwoord
-            await user.update({
-                password_hash: newPasswordHash
-            });
+            await user.update({ password: newPasswordHash });
         }
         
         res.status(200).json({
