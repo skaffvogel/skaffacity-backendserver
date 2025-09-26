@@ -1,335 +1,169 @@
 /**
- * Player controller voor het afhandelen van speler synchronisatie
+ * Player controller (Sequelize versie)
  */
 
-const Player = require('../models/player.mysql');
-const User = require('../models/user.mysql');
+const { User, Player } = require('../models');
+const { v4: uuidv4 } = require('uuid');
 
-// Helper functie om position en rotation formaat te converteren
-const formatPosition = (posArray) => {
+function ensureModels(req, res) {
+    if (!User || !Player) {
+        res.status(503).json({ status:'error', message:'Models niet beschikbaar (Sequelize niet geïnitialiseerd)' });
+        return false;
+    }
+    return true;
+}
+
+function mapPlayer(p) {
     return {
-        x: posArray[0],
-        y: posArray[1],
-        z: posArray[2]
+        id: p.id,
+        username: p.username,
+        position: [p.position_x, p.position_y, p.position_z],
+        rotation: [p.rotation_x, p.rotation_y, p.rotation_z],
+        health: p.health,
+        maxHealth: p.max_health,
+        factionId: p.faction_id || 0
     };
-};
+}
 
-/**
- * Registreer een speler in het spel
- */
+// Registreer (of update) speler
 exports.registerPlayer = async (req, res) => {
     try {
-        const { id, position, rotation, health, maxHealth, factionId, username } = req.body;
-        
-        // Valideer input
+        if (!ensureModels(req, res)) return;
+        const { id, position, rotation, health, maxHealth, factionId, username, user_id, userId } = req.body;
         if (!id || !position || !rotation) {
-            return res.status(400).json({ 
-                status: 'error', 
-                message: 'Missende vereiste velden' 
-            });
+            return res.status(400).json({ status:'error', message:'Missende vereiste velden' });
         }
-        
-        // Format positie en rotatie
-        const formattedPosition = formatPosition(position);
-        const formattedRotation = formatPosition(rotation);
-        
-        // Controleer of speler al bestaat
-        let player = await Player.findOne({ playerId: id });
-        
-        if (player) {
-            // Update bestaande speler
-            player.position = formattedPosition;
-            player.rotation = formattedRotation;
-            player.health = health || player.health;
-            player.maxHealth = maxHealth || player.maxHealth;
-            player.factionId = factionId !== undefined ? factionId : player.factionId;
-            player.isOnline = true;
-            player.lastActive = Date.now();
-            
-            await player.save();
-            
-            return res.status(200).json({ 
-                status: 'success', 
-                message: 'Speler succesvol bijgewerkt',
-                player: {
-                    id: player.playerId,
-                    username: player.username,
-                    position: [player.position.x, player.position.y, player.position.z],
-                    rotation: [player.rotation.x, player.rotation.y, player.rotation.z],
-                    health: player.health,
-                    maxHealth: player.maxHealth,
-                    factionId: player.factionId
-                }
+
+        // Bestaande speler?
+        let existing = await Player.findByPk(id);
+        if (existing) {
+            await existing.update({
+                position_x: position[0], position_y: position[1], position_z: position[2],
+                rotation_x: rotation[0], rotation_y: rotation[1], rotation_z: rotation[2],
+                health: (health ?? existing.health),
+                max_health: (maxHealth ?? existing.max_health),
+                faction_id: (factionId !== undefined ? factionId : existing.faction_id),
+                updated_at: new Date()
             });
+            existing = await Player.findByPk(id);
+            return res.status(200).json({ status:'success', message:'Speler succesvol bijgewerkt', player: mapPlayer(existing) });
         }
-        
-        // Vind de bijbehorende gebruiker
-        const user = await User.findOne({ username: username || id });
-        
+
+        // Koppel gebruiker
+        const effectiveUsername = username || id;
+        let user = null;
+        const incomingUserId = user_id || userId; // compat
+        if (incomingUserId) {
+            user = await User.findByPk(incomingUserId);
+        }
         if (!user) {
-            return res.status(404).json({ 
-                status: 'error', 
-                message: 'Gebruiker niet gevonden' 
-            });
+            user = await User.findOne({ where: { username: effectiveUsername } });
         }
-        
-        // Maak nieuwe speler aan
-        const newPlayer = new Player({
-            playerId: id,
-            userId: user._id,
-            username: username || id,
-            position: formattedPosition,
-            rotation: formattedRotation,
+        if (!user) {
+            return res.status(404).json({ status:'error', message:'Gebruiker niet gevonden' });
+        }
+
+        // Maak nieuwe speler
+        const newPlayer = await Player.create({
+            id: id.length > 36 ? uuidv4() : id, // safeguard voor te lange device identifiers
+            user_id: user.id,
+            username: effectiveUsername,
+            faction_id: factionId || 0,
             health: health || 100,
-            maxHealth: maxHealth || 100,
-            factionId: factionId || 0,
-            isOnline: true
+            max_health: maxHealth || 100,
+            position_x: position[0], position_y: position[1], position_z: position[2],
+            rotation_x: rotation[0], rotation_y: rotation[1], rotation_z: rotation[2],
+            created_at: new Date()
         });
-        
-        await newPlayer.save();
-        
-        res.status(201).json({ 
-            status: 'success', 
-            message: 'Speler succesvol geregistreerd',
-            player: {
-                id: newPlayer.playerId,
-                username: newPlayer.username,
-                position: [newPlayer.position.x, newPlayer.position.y, newPlayer.position.z],
-                rotation: [newPlayer.rotation.x, newPlayer.rotation.y, newPlayer.rotation.z],
-                health: newPlayer.health,
-                maxHealth: newPlayer.maxHealth,
-                factionId: newPlayer.factionId
-            }
-        });
-    } catch (error) {
-        console.error(`[PlayerController] registerPlayer error: ${error.message}`);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Er is een serverfout opgetreden' 
-        });
+        return res.status(201).json({ status:'success', message:'Speler succesvol geregistreerd', player: mapPlayer(newPlayer) });
+    } catch (e) {
+        console.error('[PlayerController][Sequelize] registerPlayer error:', e.message);
+        return res.status(500).json({ status:'error', message:'Serverfout bij registreren speler' });
     }
 };
 
-/**
- * Update speler positie en rotatie
- */
+// Update positie
 exports.updatePosition = async (req, res) => {
     try {
+        if (!ensureModels(req, res)) return;
         const { id, position, rotation } = req.body;
-        
-        // Valideer input
-        if (!id || !position || !rotation) {
-            return res.status(400).json({ 
-                status: 'error', 
-                message: 'Missende vereiste velden' 
-            });
-        }
-        
-        // Format positie en rotatie
-        const formattedPosition = formatPosition(position);
-        const formattedRotation = formatPosition(rotation);
-        
-        // Vind en update speler
-        const player = await Player.findOne({ playerId: id });
-        
-        if (!player) {
-            return res.status(404).json({ 
-                status: 'error', 
-                message: 'Speler niet gevonden' 
-            });
-        }
-        
-        // Update positie
-        player.position = formattedPosition;
-        player.rotation = formattedRotation;
-        player.lastActive = Date.now();
-        player.isOnline = true;
-        
-        await player.save();
-        
-        // Stuur minimaal antwoord terug om bandbreedte te besparen
-        res.status(200).json({ 
-            status: 'success'
+        if (!id || !position || !rotation) return res.status(400).json({ status:'error', message:'Missende velden' });
+        const player = await Player.findByPk(id);
+        if (!player) return res.status(404).json({ status:'error', message:'Speler niet gevonden' });
+        await player.update({
+            position_x: position[0], position_y: position[1], position_z: position[2],
+            rotation_x: rotation[0], rotation_y: rotation[1], rotation_z: rotation[2],
+            updated_at: new Date()
         });
-    } catch (error) {
-        console.error(`[PlayerController] updatePosition error: ${error.message}`);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Er is een serverfout opgetreden' 
-        });
+        return res.status(200).json({ status:'success' });
+    } catch(e) {
+        console.error('[PlayerController][Sequelize] updatePosition error:', e.message);
+        return res.status(500).json({ status:'error', message:'Serverfout' });
     }
 };
 
-/**
- * Update speler attributen (health, factie, etc)
- */
+// Update attributen
 exports.updateAttributes = async (req, res) => {
     try {
+        if (!ensureModels(req, res)) return;
         const { id, health, maxHealth, factionId } = req.body;
-        
-        // Valideer input
-        if (!id) {
-            return res.status(400).json({ 
-                status: 'error', 
-                message: 'Speler ID is vereist' 
-            });
-        }
-        
-        // Vind en update speler
-        const player = await Player.findOne({ playerId: id });
-        
-        if (!player) {
-            return res.status(404).json({ 
-                status: 'error', 
-                message: 'Speler niet gevonden' 
-            });
-        }
-        
-        // Update attributen indien beschikbaar
-        if (health !== undefined) player.health = health;
-        if (maxHealth !== undefined) player.maxHealth = maxHealth;
-        if (factionId !== undefined) player.factionId = factionId;
-        
-        player.isAlive = player.health > 0;
-        player.lastActive = Date.now();
-        
-        await player.save();
-        
-        // Stuur minimaal antwoord terug om bandbreedte te besparen
-        res.status(200).json({ 
-            status: 'success'
+        if (!id) return res.status(400).json({ status:'error', message:'Speler ID vereist' });
+        const player = await Player.findByPk(id);
+        if (!player) return res.status(404).json({ status:'error', message:'Speler niet gevonden' });
+        await player.update({
+            health: (health !== undefined ? health : player.health),
+            max_health: (maxHealth !== undefined ? maxHealth : player.max_health),
+            faction_id: (factionId !== undefined ? factionId : player.faction_id),
+            updated_at: new Date()
         });
-    } catch (error) {
-        console.error(`[PlayerController] updateAttributes error: ${error.message}`);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Er is een serverfout opgetreden' 
-        });
+        return res.status(200).json({ status:'success' });
+    } catch(e) {
+        console.error('[PlayerController][Sequelize] updateAttributes error:', e.message);
+        return res.status(500).json({ status:'error', message:'Serverfout' });
     }
 };
 
-/**
- * Krijg alle actieve spelers
- */
+// Alle spelers (optioneel filter)
 exports.getAllPlayers = async (req, res) => {
     try {
-        // Krijg alleen online spelers, tenzij anders aangegeven
-        const showOffline = req.query.showOffline === 'true';
-        const excludeId = req.query.exclude || '';
-        
-        let query = {};
-        
-        // Filter online status
-        if (!showOffline) {
-            query.isOnline = true;
-        }
-        
-        // Exclude specifieke speler indien nodig
-        if (excludeId) {
-            query.playerId = { $ne: excludeId };
-        }
-        
-        // Haal spelers op
-        const players = await Player.find(query).select(
-            'playerId username position rotation health maxHealth factionId isAlive'
-        );
-        
-        // Formatteer voor client
-        const formattedPlayers = players.map(player => ({
-            id: player.playerId,
-            username: player.username,
-            position: [player.position.x, player.position.y, player.position.z],
-            rotation: [player.rotation.x, player.rotation.y, player.rotation.z],
-            health: player.health,
-            maxHealth: player.maxHealth,
-            factionId: player.factionId,
-            isAlive: player.isAlive
-        }));
-        
-        res.status(200).json(formattedPlayers);
-    } catch (error) {
-        console.error(`[PlayerController] getAllPlayers error: ${error.message}`);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Er is een serverfout opgetreden' 
-        });
+        if (!ensureModels(req, res)) return;
+        const exclude = req.query.exclude;
+        const players = await Player.findAll();
+        const mapped = players
+            .filter(p => !exclude || p.id !== exclude)
+            .map(mapPlayer);
+        return res.status(200).json(mapped);
+    } catch(e) {
+        console.error('[PlayerController][Sequelize] getAllPlayers error:', e.message);
+        return res.status(500).json({ status:'error', message:'Serverfout' });
     }
 };
 
-/**
- * Krijg specifieke speler op ID
- */
+// Speler op ID
 exports.getPlayerById = async (req, res) => {
     try {
-        const playerId = req.params.id;
-        
-        const player = await Player.findOne({ playerId }).select(
-            'playerId username position rotation health maxHealth factionId isAlive stats'
-        );
-        
-        if (!player) {
-            return res.status(404).json({ 
-                status: 'error', 
-                message: 'Speler niet gevonden' 
-            });
-        }
-        
-        // Formatteer voor client
-        const formattedPlayer = {
-            id: player.playerId,
-            username: player.username,
-            position: [player.position.x, player.position.y, player.position.z],
-            rotation: [player.rotation.x, player.rotation.y, player.rotation.z],
-            health: player.health,
-            maxHealth: player.maxHealth,
-            factionId: player.factionId,
-            isAlive: player.isAlive,
-            stats: player.stats
-        };
-        
-        res.status(200).json(formattedPlayer);
-    } catch (error) {
-        console.error(`[PlayerController] getPlayerById error: ${error.message}`);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Er is een serverfout opgetreden' 
-        });
+        if (!ensureModels(req, res)) return;
+        const player = await Player.findByPk(req.params.id);
+        if (!player) return res.status(404).json({ status:'error', message:'Speler niet gevonden' });
+        return res.status(200).json(mapPlayer(player));
+    } catch(e) {
+        console.error('[PlayerController][Sequelize] getPlayerById error:', e.message);
+        return res.status(500).json({ status:'error', message:'Serverfout' });
     }
 };
 
-/**
- * Verwijder een speler
- */
+// Verwijder speler (admin check simplistisch)
 exports.deletePlayer = async (req, res) => {
     try {
-        const playerId = req.params.id;
-        
-        // Admin check
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Geen toestemming voor deze actie'
-            });
+        if (!ensureModels(req, res)) return;
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ status:'error', message:'Geen toestemming' });
         }
-        
-        const result = await Player.deleteOne({ playerId });
-        
-        if (result.deletedCount === 0) {
-            return res.status(404).json({ 
-                status: 'error', 
-                message: 'Speler niet gevonden' 
-            });
-        }
-        
-        res.status(200).json({ 
-            status: 'success', 
-            message: 'Speler succesvol verwijderd' 
-        });
-    } catch (error) {
-        console.error(`[PlayerController] deletePlayer error: ${error.message}`);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Er is een serverfout opgetreden' 
-        });
+        const deleted = await Player.destroy({ where: { id: req.params.id } });
+        if (!deleted) return res.status(404).json({ status:'error', message:'Speler niet gevonden' });
+        return res.status(200).json({ status:'success', message:'Speler verwijderd' });
+    } catch(e) {
+        console.error('[PlayerController][Sequelize] deletePlayer error:', e.message);
+        return res.status(500).json({ status:'error', message:'Serverfout' });
     }
 };
