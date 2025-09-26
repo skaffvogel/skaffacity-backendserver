@@ -71,6 +71,12 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { username, password } = req.body;
+    const User = models.User;
+    const Player = models.Player;
+    if (!User || !Player) {
+      console.error('[Auth][Login] User/Player model niet geïnitialiseerd!');
+      return res.status(503).json({ success:false, message:'Server niet klaar (models niet geïnitialiseerd)' });
+    }
     if (!username || !password) return res.status(400).json({ success:false, message:'Gebruikersnaam en wachtwoord vereist' });
     const user = await User.findOne({ where:{ [Op.or]: [{ username }, { email: username }] } });
     if (!user) return res.status(401).json({ success:false, message:'Ongeldige inloggegevens' });
