@@ -21,6 +21,11 @@ const generateToken = (user, player) => jwt.sign({
  */
 exports.register = async (req, res) => {
   try {
+    // Safeguard: check models
+    if (!User || !Player) {
+      console.error('[Auth][Register] User/Player model niet geïnitialiseerd!');
+      return res.status(503).json({ success:false, message:'Server niet gereed (models niet geïnitialiseerd)' });
+    }
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
       return res.status(400).json({ success:false, message:'Gebruikersnaam, e-mail en wachtwoord zijn vereist' });
