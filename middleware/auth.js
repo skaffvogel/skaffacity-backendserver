@@ -3,7 +3,8 @@
  */
 
 const jwt = require('jsonwebtoken');
-const { User, Player } = require('../models');
+// Gebruik lazy model toegang zodat Sequelize modellen kunnen initialiseren nadat de DB klaar is
+const models = require('../models');
 
 /**
  * Controleer JWT token en zet de gebruiker op req object
@@ -29,27 +30,45 @@ exports.authenticateToken = async (req, res, next) => {
                     message: 'Ongeldige of verlopen token'
                 });
             }
-            
-            // Zoek gebruiker en speler
-            const user = await User.findByPk(decoded.userId);
-            const player = await Player.findByPk(decoded.playerId);
-            
-            if (!user || !player) {
-                return res.status(403).json({
+
+            // Probeer (her)initialisatie van modellen indien nodig
+            let UserModel = models.User;
+            let PlayerModel = models.Player;
+            if (!UserModel || !PlayerModel) {
+                if (models.reinitialize) models.reinitialize();
+                UserModel = models.User;
+                PlayerModel = models.Player;
+            }
+
+            if (!UserModel || !PlayerModel) {
+                // Geen Sequelize beschikbaar – in plaats van crash: 503 of (optioneel) bypass als BYPASS_PLAYER_AUTH actief
+                if (process.env.BYPASS_PLAYER_AUTH === '1' || process.env.BYPASS_PLAYER_AUTH === 'true') {
+                    req.user = { userId: decoded.userId, playerId: decoded.playerId, username: decoded.username, fallback: true };
+                    return next();
+                }
+                return res.status(503).json({
                     success: false,
-                    message: 'Gebruiker niet gevonden'
+                    message: 'Authenticatie niet beschikbaar (sequelize models ontbreken)'
                 });
             }
-            
-            // Zet gebruiker en speler info op request object
-            req.user = {
-                userId: user.id,
-                playerId: player.id,
-                username: user.username,
-                email: user.email
-            };
-            
-            next();
+
+            try {
+                const user = await UserModel.findByPk(decoded.userId);
+                const player = await PlayerModel.findByPk(decoded.playerId);
+                if (!user || !player) {
+                    return res.status(403).json({ success:false, message:'Gebruiker niet gevonden' });
+                }
+                req.user = {
+                    userId: user.id,
+                    playerId: player.id,
+                    username: user.username,
+                    email: user.email
+                };
+                return next();
+            } catch (e2) {
+                console.error('[Auth Middleware] DB lookup error:', e2.message);
+                return res.status(500).json({ success:false, message:'Interne authenticatie fout' });
+            }
         });
     } catch (error) {
         console.error('[Auth Middleware] Error:', error);
