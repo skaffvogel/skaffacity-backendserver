@@ -103,7 +103,7 @@ exports.getAllPlayers = async (req, res) => {
         const mapped = players
             .filter(p => !exclude || p.id !== exclude)
             .map(mapPlayer);
-        return res.status(200).json(mapped);
+    return res.status(200).json({ players: mapped });
     } catch(e) {
         console.error('[PlayerController][Sequelize] getAllPlayers error:', e.message);
         return res.status(500).json({ status:'error', message:'Serverfout' });
