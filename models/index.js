@@ -22,36 +22,42 @@ function getDatabaseConfig() {
     }
 }
 
-// Import database connection
+// Import database connection (can become available later)
 const db = require('../utils/db');
-const sequelize = db.sequelize || null;
 
-let User = null;
-let Player = null;
+let _sequelize = db.sequelize || null;
+let _User = null;
+let _Player = null;
+let _initTried = false;
 
-// Initialize Sequelize models only if sequelize is available
-if (sequelize) {
+function tryInitSequelizeModels() {
+    // Refresh reference in case db.sequelize became available after module load
+    if (!_sequelize && db.sequelize) {
+        _sequelize = db.sequelize;
+    }
+    if (!_sequelize) {
+        if (!_initTried) {
+            console.warn('[MODELS] ⚠️ Sequelize not yet available (lazy init will retry on access)');
+            _initTried = true;
+        }
+        return;
+    }
+    if (_User && _Player) return; // already initialized
     try {
-        // Sequelize models (using factory functions)
         const UserFactory = require('./user.sequelize');
         const PlayerFactory = require('./player.sequelize');
-        
-        User = UserFactory(sequelize);
-        Player = PlayerFactory(sequelize);
-        
-        // Define associations
-        User.hasOne(Player, { foreignKey: 'user_id', as: 'player' });
-        Player.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
-        
-        console.log('[MODELS] ✅ Sequelize models initialized');
-    } catch (error) {
-        console.error('[MODELS] ❌ Error initializing Sequelize models:', error.message);
-        User = null;
-        Player = null;
+        _User = UserFactory(_sequelize);
+        _Player = PlayerFactory(_sequelize);
+        _User.hasOne(_Player, { foreignKey: 'user_id', as: 'player' });
+        _Player.belongsTo(_User, { foreignKey: 'user_id', as: 'user' });
+        console.log('[MODELS] ✅ Sequelize models initialized (lazy)');
+    } catch (e) {
+        console.error('[MODELS] ❌ Sequelize init error (lazy):', e.message);
     }
-} else {
-    console.warn('[MODELS] ⚠️ Sequelize not available, using legacy models only');
 }
+
+// Attempt immediate init (non-fatal if it fails)
+tryInitSequelizeModels();
 
 // Legacy models (fallback - always available)
 const FactionLegacy = require('./faction.mysql');
@@ -70,12 +76,25 @@ const syncModels = async () => {
     }
 };
 
-module.exports = {
-    sequelize,
-    User,
-    Player,
+// Dynamic export object with getters so previously cached requires still see updated models
+const exported = { 
+    get sequelize() { 
+        if (!_sequelize && db.sequelize) _sequelize = db.sequelize; 
+        return _sequelize; 
+    },
+    get User() { 
+        if (!_User) tryInitSequelizeModels(); 
+        return _User; 
+    },
+    get Player() { 
+        if (!_Player) tryInitSequelizeModels(); 
+        return _Player; 
+    },
     syncModels,
-    // Legacy models
+    reinitialize: () => { _User = null; _Player = null; tryInitSequelizeModels(); },
+    // Legacy models always available
     Faction: FactionLegacy,
     Transaction: TransactionLegacy
 };
+
+module.exports = exported;
