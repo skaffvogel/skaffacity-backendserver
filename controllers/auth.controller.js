@@ -7,13 +7,21 @@ const bcrypt = require('bcrypt');
 const { Op } = require('sequelize');
 const { User, Player } = require('../models');
 
+// Fallback memory stores when database/models unavailable (development resilience)
+const useMemoryAuth = (!User || !Player);
+let memoryUserSeq = 1;
+let memoryPlayerSeq = 1;
+const memoryUsers = new Map(); // key: username, value: { id, username, email, password_hash }
+const memoryPlayers = new Map(); // key: playerId, value: { id, user_id, username, level, skaff, health }
+
 // Helper functie voor het genereren van JWT tokens
 const generateToken = (user, player) => {
     return jwt.sign(
         { 
             userId: user.id,
             playerId: player.id,
-            username: user.username
+            username: user.username,
+            mem: useMemoryAuth ? true : false
         },
         process.env.JWT_SECRET || 'skaffacity_secret_key_2025',
         { expiresIn: '24h' }
@@ -25,6 +33,22 @@ const generateToken = (user, player) => {
  */
 exports.register = async (req, res) => {
     try {
+        if (useMemoryAuth) {
+            const { username, email, password } = req.body;
+            if (!username || !email || !password) {
+                return res.status(400).json({ success:false, message:'Gebruikersnaam, e-mail en wachtwoord zijn vereist (memory mode)' });
+            }
+            if (memoryUsers.has(username)) {
+                return res.status(409).json({ success:false, message:'Gebruikersnaam al in gebruik (memory mode)' });
+            }
+            const bcryptHash = await bcrypt.hash(password, 8);
+            const userObj = { id: memoryUserSeq++, username, email, password_hash: bcryptHash };
+            memoryUsers.set(username, userObj);
+            const playerObj = { id: memoryPlayerSeq++, user_id: userObj.id, username, level:1, skaff:1000, health:100 };
+            memoryPlayers.set(playerObj.id, playerObj);
+            const token = generateToken(userObj, playerObj);
+            return res.status(201).json({ success:true, message:'Account (memory) aangemaakt', token, player:{ id: playerObj.id, username, level:1, skaff:1000, health:100, email } });
+        }
         const { username, email, password, displayName } = req.body;
         
         // Valideer input
@@ -106,6 +130,31 @@ exports.register = async (req, res) => {
  */
 exports.login = async (req, res) => {
     try {
+        if (useMemoryAuth) {
+            const { username, password } = req.body;
+            if (!username || !password) {
+                return res.status(400).json({ success:false, message:'Gebruikersnaam en wachtwoord vereist (memory)' });
+            }
+            const user = memoryUsers.get(username);
+            if (!user) {
+                return res.status(401).json({ success:false, message:'Ongeldige inloggegevens (memory)' });
+            }
+            const isValid = await bcrypt.compare(password, user.password_hash);
+            if (!isValid) {
+                return res.status(401).json({ success:false, message:'Ongeldige inloggegevens (memory)' });
+            }
+            // Zoek associated memory player (linear scan acceptable small)
+            let player = null;
+            for (const p of memoryPlayers.values()) {
+                if (p.user_id === user.id) { player = p; break; }
+            }
+            if (!player) {
+                player = { id: memoryPlayerSeq++, user_id: user.id, username: user.username, level:1, skaff:1000, health:100 };
+                memoryPlayers.set(player.id, player);
+            }
+            const token = generateToken(user, player);
+            return res.json({ success:true, message:'Succesvol ingelogd (memory)', token, player:{ id: player.id, username: player.username, level: player.level, skaff: player.skaff, health: player.health, email: user.email } });
+        }
         const { username, password } = req.body;
         
         // Valideer input
@@ -190,6 +239,22 @@ exports.login = async (req, res) => {
  */
 exports.validateToken = async (req, res) => {
     try {
+        if (useMemoryAuth) {
+            const token = req.headers.authorization?.split(' ')[1];
+            if (!token) return res.status(401).json({ success:false, message:'Geen token opgegeven' });
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET || 'skaffacity_secret_key_2025');
+                if (!decoded || !decoded.mem) return res.status(401).json({ success:false, message:'Token ongeldig (memory)' });
+                // reconstruct player
+                let player = null; let user = null;
+                for (const u of memoryUsers.values()) if (u.id === decoded.userId) { user = u; break; }
+                for (const p of memoryPlayers.values()) if (p.id === decoded.playerId) { player = p; break; }
+                if (!user || !player) return res.status(401).json({ success:false, message:'Token entiteiten ontbreken (memory)' });
+                return res.json({ success:true, message:'Token geldig (memory)', player:{ id: player.id, username: player.username, level: player.level, skaff: player.skaff, health: player.health, email: user.email } });
+            } catch(e) {
+                return res.status(401).json({ success:false, message:'Ongeldige of verlopen token (memory)' });
+            }
+        }
         const token = req.headers.authorization?.split(' ')[1];
         
         if (!token) {

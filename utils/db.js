@@ -103,6 +103,7 @@ const initDatabase = async () => {
       console.log('✅ [DATABASE] Sequelize connection established successfully');
     } catch (seqError) {
       console.warn('⚠️ [DATABASE] Sequelize connection failed:', seqError.message);
+      console.warn('⚠️ [DATABASE] Continuing with raw MySQL pool only (legacy/memory fallbacks will be used)');
       sequelize = null;
     }
     
