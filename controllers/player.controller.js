@@ -2,7 +2,7 @@
  * Player controller (PURE SEQUELIZE MODE)
  */
 
-const { User, Player } = require('../models');
+const models = require('../models');
 const { v4: uuidv4 } = require('uuid');
 
 function mapPlayer(p) {
@@ -21,6 +21,8 @@ function mapPlayer(p) {
 // Deprecated: speler wordt aangemaakt bij /auth/register. Idempotent update/create voor oude clients.
 exports.registerPlayer = async (req, res) => {
     try {
+        const Player = models.Player;
+        const User = models.User;
         const { id, position, rotation, health, maxHealth, factionId } = req.body;
         if (!id) return res.status(400).json({ status:'error', message:'ID vereist' });
         let player = await Player.findByPk(id);
@@ -54,6 +56,7 @@ exports.registerPlayer = async (req, res) => {
 // Update positie
 exports.updatePosition = async (req, res) => {
     try {
+        const Player = models.Player;
         const { id, position, rotation } = req.body;
         if (!id || !position || !rotation) return res.status(400).json({ status:'error', message:'Missende velden' });
         const player = await Player.findByPk(id);
@@ -73,6 +76,7 @@ exports.updatePosition = async (req, res) => {
 // Update attributen
 exports.updateAttributes = async (req, res) => {
     try {
+        const Player = models.Player;
         const { id, health, maxHealth, factionId } = req.body;
         if (!id) return res.status(400).json({ status:'error', message:'Speler ID vereist' });
         const player = await Player.findByPk(id);
@@ -93,6 +97,7 @@ exports.updateAttributes = async (req, res) => {
 // Alle spelers (optioneel filter)
 exports.getAllPlayers = async (req, res) => {
     try {
+        const Player = models.Player;
         const exclude = req.query.exclude;
         const players = await Player.findAll();
         const mapped = players
@@ -108,6 +113,7 @@ exports.getAllPlayers = async (req, res) => {
 // Speler op ID
 exports.getPlayerById = async (req, res) => {
     try {
+        const Player = models.Player;
         const player = await Player.findByPk(req.params.id);
         if (!player) return res.status(404).json({ status:'error', message:'Speler niet gevonden' });
         return res.status(200).json(mapPlayer(player));
@@ -120,6 +126,7 @@ exports.getPlayerById = async (req, res) => {
 // Verwijder speler (admin check simplistisch)
 exports.deletePlayer = async (req, res) => {
     try {
+        const Player = models.Player;
         if (!req.user || req.user.role !== 'admin') {
             return res.status(403).json({ status:'error', message:'Geen toestemming' });
         }

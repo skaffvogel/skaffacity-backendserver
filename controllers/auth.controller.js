@@ -162,6 +162,8 @@ exports.refreshToken = async (req, res) => {
  */
 exports.getUserProfile = async (req, res) => {
   try {
+    const User = models.User;
+    const Player = models.Player;
     const userId = req.user.userId;
     const user = await User.findByPk(userId);
     const player = await Player.findOne({ where:{ user_id: userId } });
