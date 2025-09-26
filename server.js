@@ -265,6 +265,8 @@ console.log('[MODULE] Auth middleware geladen!');
 // Express app initialiseren
 console.log('[MODULE] Express app initialiseren...');
 const app = express();
+// Enable trust proxy so Nginx forwarded headers are honored (rate limiting, IP, HTTPS scheme)
+app.set('trust proxy', 1);
 console.log('[MODULE] Express app geïnitialiseerd!');
 
 // Logging configureren
@@ -277,7 +279,18 @@ const accessLogStream = fs.createWriteStream(
 );
 
 // Middleware
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+// Refined CORS: allow specific origins (env override or default allowlist)
+const allowedOrigins = (process.env.CORS_ORIGINS || 'https://api.lvlagency.nl,https://lvlagency.nl,http://localhost:3000').split(',').map(o => o.trim());
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // non-browser / curl
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS origin not allowed: ' + origin));
+  },
+  credentials: true,
+  allowedHeaders: ['Authorization','Content-Type','Accept','X-Requested-With'],
+  methods: ['GET','POST','PUT','DELETE','OPTIONS']
+}));
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -295,7 +308,8 @@ app.use(limiter);
 // Request logging
 app.use((req, res, next) => {
   req.requestId = uuidv4();
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - RequestID: ${req.requestId}`);
+  const realIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - RequestID: ${req.requestId} - IP: ${realIp}`);
   next();
 });
 
