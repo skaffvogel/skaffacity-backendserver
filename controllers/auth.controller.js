@@ -6,7 +6,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { Op } = require('sequelize');
-const { sequelize, User, Player } = require('../models');
+const models = require('../models');
 const { v4: uuidv4 } = require('uuid');
 
 // Helper functie voor het genereren van JWT tokens
@@ -21,7 +21,10 @@ const generateToken = (user, player) => jwt.sign({
  */
 exports.register = async (req, res) => {
   try {
-    // Safeguard: check models
+    // Safeguard: check models (runtime)
+    const User = models.User;
+    const Player = models.Player;
+    const sequelize = models.sequelize;
     if (!User || !Player) {
       console.error('[Auth][Register] User/Player model niet geïnitialiseerd!');
       return res.status(503).json({ success:false, message:'Server niet gereed (models niet geïnitialiseerd)' });
