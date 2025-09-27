@@ -21,7 +21,7 @@ router.get('/discover', (req, res) => {
         const servers = Array.from(activeServers.values()).map(server => ({
             id: server.id,
             name: server.name,
-            ip: server.ip,
+            ip: server.alias || server.ip,
             port: server.port,
             currentPlayers: server.currentPlayers || 0,
             maxPlayers: server.maxPlayers || 50,
