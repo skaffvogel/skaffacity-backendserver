@@ -18,17 +18,6 @@ try {
 }
 
 const express = require('express');
-// --- API Key beveiliging ---
-const VALID_API_KEYS = [process.env.API_KEY || 'YOUR_SECRET_KEY_HERE']; // Zet je key in .env of hardcoded
-
-function apiKeyMiddleware(req, res, next) {
-  // Key mag in header (x-api-key) of als query (?apikey=...)
-  const key = req.headers['x-api-key'] || req.query.apikey;
-  if (!key || !VALID_API_KEYS.includes(key)) {
-    return res.status(401).json({ error: 'Ongeldige of ontbrekende API key' });
-  }
-  next();
-}
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -248,13 +237,6 @@ console.log('[MODULE] Auth middleware geladen!');
 // Express app initialiseren
 console.log('[MODULE] Express app initialiseren...');
 const app = express();
-
-// API key/licentiekey beveiliging toepassen op alle routes behalve health/ready/status
-app.use((req, res, next) => {
-  const openPaths = ['/health', '/ready', '/status'];
-  if (openPaths.some(p => req.path.endsWith(p))) return next();
-  return apiKeyMiddleware(req, res, next);
-});
 // Enable trust proxy so Nginx forwarded headers are honored (rate limiting, IP, HTTPS scheme)
 app.set('trust proxy', 1);
 console.log('[MODULE] Express app geïnitialiseerd!');

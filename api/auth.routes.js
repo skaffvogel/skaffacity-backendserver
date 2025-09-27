@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/jwt');
 
 // Importeer auth controller
 const {
@@ -21,7 +21,7 @@ router.post('/register', register);
 router.post('/login', login);
 router.post('/validate', validateToken);
 router.post('/refresh', refreshToken);
-router.get('/me', authenticateToken, getUserProfile);
-router.put('/me', authenticateToken, updateUserProfile);
+router.get('/me', authenticateJWT, getUserProfile);
+router.put('/me', authenticateJWT, updateUserProfile);
 
 module.exports = router;
