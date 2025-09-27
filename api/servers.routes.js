@@ -77,6 +77,7 @@ router.post('/register', (req, res) => {
             id: serverId,
             name: name || `SkaffaCity Server #${port}`,
             ip: ip,
+            alias: 'panel.lvlagency.nl',
             port: parseInt(port),
             maxPlayers: parseInt(maxPlayers) || 50,
             currentPlayers: 0,
