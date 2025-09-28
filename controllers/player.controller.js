@@ -1,3 +1,57 @@
+// Server-authoritative sync endpoint
+exports.syncPlayer = async (req, res) => {
+    try {
+        const Player = require('../utils/database').Player;
+        const db = require('../utils/db');
+        const { id, money, inventory, factionId, health, maxHealth, position, rotation } = req.body;
+        if (!id) return res.status(400).json({ status:'error', message:'Speler ID vereist' });
+        let player = await Player.findById(id);
+        if (!player) return res.status(404).json({ status:'error', message:'Speler niet gevonden' });
+
+        // Update basisgegevens
+        await player.update({
+            health: health !== undefined ? health : player.health,
+            maxHealth: maxHealth !== undefined ? maxHealth : player.maxHealth,
+            factionId: factionId !== undefined ? factionId : player.factionId,
+            position: position || player.position,
+            rotation: rotation || player.rotation
+        });
+
+        // Update geld (economy)
+        if (money !== undefined) {
+            await db.query('UPDATE economy SET skaff = ?, last_update = CURRENT_TIMESTAMP WHERE player_id = ?', [money, id]);
+        }
+
+        // Update inventory (optioneel, verwacht array van items)
+        if (Array.isArray(inventory)) {
+            // Haal inventoryId op
+            const [inventoryData] = await db.query('SELECT * FROM inventory WHERE player_id = ?', [id]);
+            let inventoryId = inventoryData ? inventoryData.id : null;
+            if (!inventoryId) {
+                // Maak nieuwe inventory aan indien nodig
+                const { v4: uuidv4 } = require('uuid');
+                inventoryId = uuidv4();
+                await db.query('INSERT INTO inventory (id, player_id, max_slots) VALUES (?, ?, ?)', [inventoryId, id, 20]);
+            }
+            // Verwijder bestaande items
+            await db.query('DELETE FROM inventory_items WHERE inventory_id = ?', [inventoryId]);
+            // Voeg nieuwe items toe
+            for (const item of inventory) {
+                if (!item.itemId || !item.quantity) continue;
+                const { v4: uuidv4 } = require('uuid');
+                await db.query(
+                    'INSERT INTO inventory_items (id, inventory_id, item_id, quantity, slot) VALUES (?, ?, ?, ?, ?)',
+                    [uuidv4(), inventoryId, item.itemId, item.quantity, item.slot || 0]
+                );
+            }
+        }
+
+        return res.status(200).json({ status:'success', message:'Speler gesynchroniseerd' });
+    } catch (e) {
+        console.error('[PlayerController] syncPlayer error:', e.message);
+        return res.status(500).json({ status:'error', message:'Serverfout' });
+    }
+};
 /**
  * Player controller (PURE SEQUELIZE MODE)
  */

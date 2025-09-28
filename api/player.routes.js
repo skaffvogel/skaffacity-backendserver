@@ -20,10 +20,15 @@ const {
     updateAttributes,
     getAllPlayers,
     getPlayerById,
-    deletePlayer
+    deletePlayer,
+    syncPlayer
 } = require('../controllers/player.controller');
 
 // Speler routes
+
+// Nieuwe endpoint voor server-authoritative sync
+router.post('/sync', optionalAuth, syncPlayer);
+
 router.post('/register', optionalAuth, registerPlayer);
 router.post('/position', optionalAuth, updatePosition);
 router.post('/attributes', optionalAuth, updateAttributes);
